@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 
-from . import fetch_script, ontology, qids, wikipedia_articles
+from .env_loader import load_project_env
+from . import dump_extract, fetch_script, ontology, qids, wikipedia_articles
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
@@ -37,6 +38,14 @@ def build_parser() -> argparse.ArgumentParser:
         subparsers.add_parser("generate-fetch", help="Generate a shell script to fetch Wikidata JSON."),
         fetch_script.build_parser().parse_args([]),
         ["input", "output", "json_dir"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "extract-dump-json",
+            help="Extract requested Wikidata entity JSON files from a downloaded dump.",
+        ),
+        dump_extract.build_parser().parse_args([]),
+        ["input", "dump", "output_dir"],
     )
     add_arguments(
         subparsers.add_parser("build-ontology", help="Build ontology TSV from downloaded JSON."),
@@ -73,10 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Dispatch one CLI command to the matching module. / CLI コマンドを対応するモジュールへ振り分ける。"""
 
+    load_project_env()
     args = build_parser().parse_args(argv)
     handlers: dict[str, tuple[Callable[[list[str] | None], int], list[str], list[str]]] = {
         "extract-qids": (qids.main, [], ["input", "output", "root_qid"]),
         "generate-fetch": (fetch_script.main, [], ["input", "output", "json_dir"]),
+        "extract-dump-json": (dump_extract.main, [], ["input", "dump", "output_dir"]),
         "build-ontology": (ontology.main, [], ["json_dir", "output", "root_qid"]),
         "build-wikipedia-manifest": (
             wikipedia_articles.main,

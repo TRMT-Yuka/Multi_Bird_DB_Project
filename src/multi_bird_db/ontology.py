@@ -37,6 +37,8 @@ def load_entity(json_path: Path) -> dict[str, Any]:
     """Load one Wikidata JSON file and return the entity data inside it. / 1 件の Wikidata JSON を読み、内部の entity データを返す。"""
 
     payload = json.loads(json_path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict) and payload.get("id") and payload.get("type"):
+        return payload
     entities = payload.get("entities", {})
     if not entities:
         raise ValueError(f"No entities found in {json_path}")
@@ -57,27 +59,45 @@ def get_nested_value(mapping: dict[str, Any], *keys: str) -> Any:
 def get_label(entity: dict[str, Any], lang: str) -> str:
     """Return one label in the requested language. / 指定言語のラベルを返す。"""
 
-    return get_nested_value(entity, "labels", lang, "value")
+    value = entity.get("labels", {}).get(lang, "")
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return value.get("value", "")
+    return ""
 
 
 def get_aliases(entity: dict[str, Any], lang: str) -> str:
     """Return aliases as a JSON string so they fit in one TSV cell. / 別名を TSV 1 セルに入る JSON 文字列で返す。"""
 
     aliases = entity.get("aliases", {}).get(lang, [])
-    return json.dumps([item["value"] for item in aliases if item.get("value")], ensure_ascii=False)
+    normalized = [
+        item if isinstance(item, str) else item.get("value", "")
+        for item in aliases
+        if (isinstance(item, str) and item) or (isinstance(item, dict) and item.get("value"))
+    ]
+    return json.dumps(normalized, ensure_ascii=False)
 
 
 def get_claims(entity: dict[str, Any], prop: str) -> list[dict[str, Any]]:
     """Return all claim objects for one Wikidata property. / あるプロパティの claim 一覧を返す。"""
 
-    return entity.get("claims", {}).get(prop, [])
+    if prop in entity.get("claims", {}):
+        return entity.get("claims", {}).get(prop, [])
+    return entity.get("statements", {}).get(prop, [])
 
 
 def get_first_claim_value(entity: dict[str, Any], prop: str) -> Any:
     """Return the first claim value for one property. / あるプロパティの最初の値を返す。"""
 
     for claim in get_claims(entity, prop):
-        value = get_nested_value(claim, "mainsnak", "datavalue", "value")
+        if "mainsnak" in claim:
+            value = get_nested_value(claim, "mainsnak", "datavalue", "value")
+        else:
+            value_field = claim.get("value", {})
+            if not isinstance(value_field, dict) or value_field.get("type") != "value":
+                continue
+            value = value_field.get("content", "")
         if value not in ("", None):
             return value
     return ""
@@ -87,7 +107,9 @@ def get_claim_entity_id(entity: dict[str, Any], prop: str) -> str:
     """Return the first linked entity ID for one property. / あるプロパティの最初の参照先 QID を返す。"""
 
     value = get_first_claim_value(entity, prop)
-    return value.get("id", "") if isinstance(value, dict) else ""
+    if not isinstance(value, dict):
+        return ""
+    return value.get("id", "") or get_nested_value(value, "content", "id")
 
 
 def get_claim_string(entity: dict[str, Any], prop: str) -> str:
@@ -100,7 +122,8 @@ def get_claim_string(entity: dict[str, Any], prop: str) -> str:
 def get_sitelink_title(entity: dict[str, Any], site_key: str) -> str:
     """Return the linked Wikipedia title for one site. / あるサイトに対応する Wikipedia 記事タイトルを返す。"""
 
-    return entity.get("sitelinks", {}).get(site_key, {}).get("title", "")
+    sitelink = entity.get("sitelinks", {}).get(site_key, {})
+    return sitelink.get("title", "") if isinstance(sitelink, dict) else ""
 
 
 def build_wikipedia_url(language_code: str, title: str) -> str:
@@ -114,11 +137,15 @@ def build_wikipedia_url(language_code: str, title: str) -> str:
 def get_image_names(entity: dict[str, Any]) -> str:
     """Return image file names as a JSON string. / 画像ファイル名一覧を JSON 文字列で返す。"""
 
-    images = [
-        value
-        for claim in get_claims(entity, "P18")
-        if isinstance((value := get_nested_value(claim, "mainsnak", "datavalue", "value")), str)
-    ]
+    images: list[str] = []
+    for claim in get_claims(entity, "P18"):
+        if "mainsnak" in claim:
+            value = get_nested_value(claim, "mainsnak", "datavalue", "value")
+        else:
+            value_field = claim.get("value", {})
+            value = value_field.get("content", "") if isinstance(value_field, dict) else ""
+        if isinstance(value, str):
+            images.append(value)
     return json.dumps(images, ensure_ascii=False)
 
 

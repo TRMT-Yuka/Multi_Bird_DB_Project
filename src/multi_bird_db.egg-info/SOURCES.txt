@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/multi_bird_db/__init__.py
+src/multi_bird_db/cli.py
+src/multi_bird_db/config.py
+src/multi_bird_db/fetch_script.py
+src/multi_bird_db/ontology.py
+src/multi_bird_db/qids.py
+src/multi_bird_db/wikipedia_articles.py
+src/multi_bird_db.egg-info/PKG-INFO
+src/multi_bird_db.egg-info/SOURCES.txt
+src/multi_bird_db.egg-info/dependency_links.txt
+src/multi_bird_db.egg-info/entry_points.txt
+src/multi_bird_db.egg-info/top_level.txt

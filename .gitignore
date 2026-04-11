@@ -22,7 +22,15 @@ docs/
 .gitignore
 data_handling_rules.txt
 ontology.pickle
+conda_switch.sh
+
 
 
 # Legacy scratch outputs
 output/
+temp/
+
+# Local secrets
+.env
+.env.*
+!.env.example
