@@ -1,0 +1,28 @@
+.venv/
+__pycache__/
+*.pyc
+
+# # # Generated datasets
+# data/interim/**
+# !data/interim/.gitkeep
+# data/processed/**
+# !data/processed/.gitkeep
+
+# # Downloaded or derived assets
+# data/external/audio/**
+# !data/external/audio/.gitkeep
+# data/external/documents/wikipedia/**
+# data/external/images/**
+# !data/external/images/.gitkeep
+# data/external/embeddings/**
+# !data/external/embeddings/.gitkeep
+
+data/
+docs/
+.gitignore
+data_handling_rules.txt
+ontology.pickle
+
+
+# Legacy scratch outputs
+output/
