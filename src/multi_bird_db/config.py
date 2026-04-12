@@ -29,6 +29,8 @@ class ProjectPaths:
     graph_dir: Path
     taxonomy_graph_pkl: Path
     taxonomy_graph_html_dir: Path
+    embeddings_dir: Path
+    graph_embeddings_dir: Path
     wikipedia_manifest_tsv: Path
 
 
@@ -40,6 +42,7 @@ def get_project_paths() -> ProjectPaths:
     wikidata_dump_dir = raw_wikidata_dir / "dumps"
     interim_wikidata_dir = root / "data" / "interim" / "wikidata"
     processed_dir = root / "data" / "processed"
+    embeddings_dir = root / "data" / "external" / "embeddings"
     graph_dir = processed_dir / "graph"
     documents_dir = root / "data" / "external" / "documents"
     wikipedia_dir = documents_dir / "wikipedia"
@@ -67,5 +70,7 @@ def get_project_paths() -> ProjectPaths:
         graph_dir=graph_dir,
         taxonomy_graph_pkl=graph_dir / "bird_taxonomy_graph.pkl",
         taxonomy_graph_html_dir=graph_dir / "dash",
+        embeddings_dir=embeddings_dir,
+        graph_embeddings_dir=embeddings_dir / "graph",
         wikipedia_manifest_tsv=processed_dir / "wikipedia_article_manifest.tsv",
     )

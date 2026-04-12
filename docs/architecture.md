@@ -8,7 +8,7 @@
 4. `make extract-dump-json` で対象 QID の JSON を切り出す
 5. `make build-ontology` で ontology PKL を作る
 6. `make build-graph` で taxonomy graph PKL を作る
-7. `make visualize-graph` で taxonomy 部分グラフ PNG を作る
+7. `make build-embeddings` で graph 埋め込みを作る
 8. `make serve-graph` で taxonomy graph viewer を起動する
 9. `make build-wikipedia-manifest` で Wikipedia 記事一覧 TSV を作る
 10. `make fetch-wikipedia-xml` で英語版・日本語版記事 XML を保存する
@@ -46,14 +46,16 @@ data/                                     # このプロジェクトのデータ
 ├── processed/                            # 下流処理が直接参照する整形済み成果物
 │   ├── bird_ontology.pkl                 # 鳥類 ontology の構造化成果物
 │   ├── graph/
-│   │   ├── bird_taxonomy_graph.pkl       # 鳥類 taxonomy の NetworkX graph
-│   │   └── figures/
-│   │       └── bird_taxonomy_graph.png   # taxonomy 部分グラフの可視化
+│   │   └── bird_taxonomy_graph.pkl       # 鳥類 taxonomy の NetworkX graph
 │   └── wikipedia_article_manifest.tsv    # Wikipedia 記事取得対象一覧
 └── external/                             # 補助データと別モダリティの保管先
     ├── documents/                        # XML、抽出本文、将来の文書コーパス
     ├── audio/                            # 鳴き声音声と付随メタデータ
-    └── embeddings/                       # ベクトル本体とそのメタ情報
+    └── embeddings/
+        └── graph/
+            └── taxonomy/
+                ├── node2vec/             # node2vec 埋め込み
+                └── hgcn/                 # HGCN 風ハイパボリック埋め込み
 ```
 
 ## ファイルの役割
@@ -78,8 +80,8 @@ data/                                     # このプロジェクトのデータ
   - JSON から ontology PKL を生成する処理
 - `src/multi_bird_db/graph.py`
   - ontology PKL から taxonomy の NetworkX graph PKL を生成する処理
-- `src/multi_bird_db/graph_visualization.py`
-  - graph PKL から部分グラフ PNG を描画する処理
+- `src/multi_bird_db/embeddings.py`
+  - graph PKL から埋め込みを生成して保存する処理
 - `src/multi_bird_db/graph_dash.py`
   - graph PKL から Dash Cytoscape viewer を起動する処理
 - `src/multi_bird_db/wikipedia_articles.py`
@@ -91,6 +93,7 @@ data/                                     # このプロジェクトのデータ
 - Wikidata dump から必要な QID の entity JSON を切り出す
 - 取得済み JSON から ontology PKL を生成する
 - ontology PKL から taxonomy graph PKL を生成する
+- taxonomy graph PKL から node2vec / HGCN 風埋め込みを生成する
 
 ## 将来の拡張
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 
-from . import dump_extract, graph, graph_dash, ontology, qids, wikipedia_articles
+from . import dump_extract, embeddings, graph, graph_dash, ontology, qids, wikipedia_articles
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
@@ -62,6 +62,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_arguments(
         subparsers.add_parser(
+            "build-embeddings",
+            help="Build graph embeddings from a taxonomy graph PKL.",
+        ),
+        embeddings.build_parser().parse_args([]),
+        [
+            "input",
+            "output_dir",
+            "algorithm",
+            "dim",
+            "seed",
+            "walk_length",
+            "num_walks",
+            "window_size",
+            "negative_samples",
+            "epochs",
+            "learning_rate",
+            "p",
+            "q",
+            "undirected",
+            "layers",
+            "residual",
+            "curvature",
+            "root_qid",
+        ],
+    )
+    add_arguments(
+        subparsers.add_parser(
             "serve-graph",
             help="Serve an interactive Dash Cytoscape viewer for the taxonomy graph.",
         ),
@@ -104,6 +131,30 @@ def main(argv: list[str] | None = None) -> int:
         "extract-dump-json": (dump_extract.main, [], ["input", "dump", "output_dir"]),
         "build-ontology": (ontology.main, [], ["json_dir", "output", "root_qid"]),
         "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
+        "build-embeddings": (
+            embeddings.main,
+            [],
+            [
+                "input",
+                "output_dir",
+                "algorithm",
+                "dim",
+                "seed",
+                "walk_length",
+                "num_walks",
+                "window_size",
+                "negative_samples",
+                "epochs",
+                "learning_rate",
+                "p",
+                "q",
+                "undirected",
+                "layers",
+                "residual",
+                "curvature",
+                "root_qid",
+            ],
+        ),
         "serve-graph": (
             graph_dash.main,
             [],

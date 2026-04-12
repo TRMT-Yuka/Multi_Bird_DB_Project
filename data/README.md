@@ -20,9 +20,7 @@ data/                                     # このプロジェクトで扱う全
 │   ├── bird_ontology.pkl                 # 鳥類 ontology の構造化成果物
 │   ├── graph/                            # graph モダリティの成果物
 │   │   ├── bird_taxonomy_graph.pkl       # NetworkX taxonomy graph の構造化成果物
-│   │   ├── dash/                         # Dash Cytoscape viewer 用の作業領域
-│   │   └── figures/                      # graph 可視化画像
-│   │       └── bird_taxonomy_graph.png   # taxonomy graph の PNG
+│   │   └── dash/                         # Dash Cytoscape viewer 用の作業領域
 │   └── wikipedia_article_manifest.tsv    # Wikipedia 取得対象一覧
 └── external/                             # 文書・音声・埋め込みの保管先
     ├── documents/                        # 文書コーパス
@@ -48,10 +46,12 @@ data/                                     # このプロジェクトで扱う全
   - ontology から生成した `networkx.DiGraph` です
 - `processed/graph/dash/`
   - Dash Cytoscape viewer 用の graph モダリティ作業領域です
-- `processed/graph/figures/bird_taxonomy_graph.png`
-  - graph の部分可視化 PNG です
 - `processed/wikipedia_article_manifest.tsv`
   - Wikipedia XML とテキストの保存先を管理する一覧です
+- `external/embeddings/graph/taxonomy/node2vec/`
+  - taxonomy graph の node2vec 埋め込みです
+- `external/embeddings/graph/taxonomy/hgcn/`
+  - taxonomy graph の HGCN 風ハイパボリック埋め込みです
 
 生成順やコマンドは [README_wikidata_pred.md](../README_wikidata_pred.md) の「実行」「出力」を参照してください。
 

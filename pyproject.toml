@@ -13,6 +13,7 @@ dependencies = [
     "dash-cytoscape",
     "matplotlib",
     "networkx",
+    "numpy",
 ]
 
 [project.scripts]
