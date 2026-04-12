@@ -3,15 +3,18 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 
-from .env_loader import load_project_env
-from . import dump_extract, fetch_script, ontology, qids, wikipedia_articles
+from . import dump_extract, graph, graph_dash, ontology, qids, wikipedia_articles
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
     """Copy a small set of default arguments into one subcommand parser. / 既定引数の一部をサブコマンド用パーサへ写す。"""
 
     for name in names:
-        parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=getattr(defaults, name))
+        default = getattr(defaults, name)
+        if isinstance(default, bool):
+            parser.add_argument(f"--{name.replace('_', '-')}", dest=name, action="store_true", default=default)
+        else:
+            parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=default)
 
 
 def namespace_to_args(args: argparse.Namespace, names: list[str]) -> list[str]:
@@ -19,7 +22,12 @@ def namespace_to_args(args: argparse.Namespace, names: list[str]) -> list[str]:
 
     flat_args: list[str] = []
     for name in names:
-        flat_args.extend([f"--{name.replace('_', '-')}", str(getattr(args, name))])
+        value = getattr(args, name)
+        if isinstance(value, bool):
+            if value:
+                flat_args.append(f"--{name.replace('_', '-')}")
+            continue
+        flat_args.extend([f"--{name.replace('_', '-')}", str(value)])
     return flat_args
 
 
@@ -35,11 +43,6 @@ def build_parser() -> argparse.ArgumentParser:
         ["input", "output", "root_qid"],
     )
     add_arguments(
-        subparsers.add_parser("generate-fetch", help="Generate a shell script to fetch Wikidata JSON."),
-        fetch_script.build_parser().parse_args([]),
-        ["input", "output", "json_dir"],
-    )
-    add_arguments(
         subparsers.add_parser(
             "extract-dump-json",
             help="Extract requested Wikidata entity JSON files from a downloaded dump.",
@@ -48,9 +51,22 @@ def build_parser() -> argparse.ArgumentParser:
         ["input", "dump", "output_dir"],
     )
     add_arguments(
-        subparsers.add_parser("build-ontology", help="Build ontology TSV from downloaded JSON."),
+        subparsers.add_parser("build-ontology", help="Build ontology PKL from downloaded JSON."),
         ontology.build_parser().parse_args([]),
         ["json_dir", "output", "root_qid"],
+    )
+    add_arguments(
+        subparsers.add_parser("build-graph", help="Build taxonomy graph PKL from ontology PKL."),
+        graph.build_parser().parse_args([]),
+        ["input", "output", "root_qid"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "serve-graph",
+            help="Serve an interactive Dash Cytoscape viewer for the taxonomy graph.",
+        ),
+        graph_dash.build_parser().parse_args([]),
+        ["input", "root_qid", "max_depth", "max_nodes", "host", "port", "debug"],
     )
     add_arguments(
         subparsers.add_parser(
@@ -82,13 +98,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Dispatch one CLI command to the matching module. / CLI コマンドを対応するモジュールへ振り分ける。"""
 
-    load_project_env()
     args = build_parser().parse_args(argv)
     handlers: dict[str, tuple[Callable[[list[str] | None], int], list[str], list[str]]] = {
         "extract-qids": (qids.main, [], ["input", "output", "root_qid"]),
-        "generate-fetch": (fetch_script.main, [], ["input", "output", "json_dir"]),
         "extract-dump-json": (dump_extract.main, [], ["input", "dump", "output_dir"]),
         "build-ontology": (ontology.main, [], ["json_dir", "output", "root_qid"]),
+        "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
+        "serve-graph": (
+            graph_dash.main,
+            [],
+            ["input", "root_qid", "max_depth", "max_nodes", "host", "port", "debug"],
+        ),
         "build-wikipedia-manifest": (
             wikipedia_articles.main,
             ["build-wikipedia-manifest"],

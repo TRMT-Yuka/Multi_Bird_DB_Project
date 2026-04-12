@@ -3,7 +3,7 @@ pyproject.toml
 src/multi_bird_db/__init__.py
 src/multi_bird_db/cli.py
 src/multi_bird_db/config.py
-src/multi_bird_db/fetch_script.py
+src/multi_bird_db/dump_extract.py
 src/multi_bird_db/ontology.py
 src/multi_bird_db/qids.py
 src/multi_bird_db/wikipedia_articles.py

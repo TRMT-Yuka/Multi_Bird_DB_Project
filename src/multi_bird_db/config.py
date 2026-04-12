@@ -21,10 +21,14 @@ class ProjectPaths:
     wikipedia_text_en_dir: Path
     wikipedia_text_ja_dir: Path
     query_tsv: Path
+    wikidata_dump_dir: Path
+    wikidata_dump_file: Path
     qids_tsv: Path
-    fetch_script: Path
     json_dir: Path
-    ontology_tsv: Path
+    ontology_pkl: Path
+    graph_dir: Path
+    taxonomy_graph_pkl: Path
+    taxonomy_graph_html_dir: Path
     wikipedia_manifest_tsv: Path
 
 
@@ -33,8 +37,10 @@ def get_project_paths() -> ProjectPaths:
 
     root = Path(__file__).resolve().parents[2]
     raw_wikidata_dir = root / "data" / "raw" / "wikidata"
+    wikidata_dump_dir = raw_wikidata_dir / "dumps"
     interim_wikidata_dir = root / "data" / "interim" / "wikidata"
     processed_dir = root / "data" / "processed"
+    graph_dir = processed_dir / "graph"
     documents_dir = root / "data" / "external" / "documents"
     wikipedia_dir = documents_dir / "wikipedia"
     wikipedia_xml_dir = wikipedia_dir / "xml"
@@ -53,9 +59,13 @@ def get_project_paths() -> ProjectPaths:
         wikipedia_text_en_dir=wikipedia_text_dir / "en",
         wikipedia_text_ja_dir=wikipedia_text_dir / "ja",
         query_tsv=raw_wikidata_dir / "query.tsv",
+        wikidata_dump_dir=wikidata_dump_dir,
+        wikidata_dump_file=wikidata_dump_dir / "latest-all.json.bz2",
         qids_tsv=interim_wikidata_dir / "bird_qids.tsv",
-        fetch_script=interim_wikidata_dir / "fetch_entities.sh",
         json_dir=interim_wikidata_dir / "json",
-        ontology_tsv=processed_dir / "bird_ontology.tsv",
+        ontology_pkl=processed_dir / "bird_ontology.pkl",
+        graph_dir=graph_dir,
+        taxonomy_graph_pkl=graph_dir / "bird_taxonomy_graph.pkl",
+        taxonomy_graph_html_dir=graph_dir / "dash",
         wikipedia_manifest_tsv=processed_dir / "wikipedia_article_manifest.tsv",
     )

@@ -6,3 +6,8 @@ dependencies:
   - pip
   - pip:
       - -e .
+      - dash
+      - dash-cytoscape
+      - matplotlib
+      - networkx
+      - qwikidata

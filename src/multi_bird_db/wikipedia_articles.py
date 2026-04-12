@@ -41,7 +41,7 @@ def validate_json_dir(json_dir: Path) -> list[Path]:
 
     if not json_dir.exists():
         raise FileNotFoundError(f"JSON directory does not exist: {json_dir}")
-    json_paths = sorted(json_dir.glob("Q*.json"))
+    json_paths = sorted(json_dir.rglob("Q*.json"))
     if not json_paths:
         raise FileNotFoundError(f"No JSON files found under: {json_dir}")
     return json_paths

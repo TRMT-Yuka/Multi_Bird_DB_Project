@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import bz2
-import gzip
 import json
-from collections.abc import Iterator
+import sys
+import time
 from pathlib import Path
-from typing import TextIO
+
+from qwikidata.json_dump import WikidataJsonDump
 
 from .config import get_project_paths
 
@@ -24,30 +24,36 @@ def load_qids(input_path: Path) -> set[str]:
     return qids
 
 
-def open_dump_text(dump_path: Path) -> TextIO:
-    """Open a Wikidata dump as UTF-8 text. / Wikidata dump を UTF-8 テキストとして開く。"""
+def qid_to_json_path(output_dir: Path, qid: str) -> Path:
+    """Return the hierarchical JSON path for one QID. / 1 件の QID に対応する階層化 JSON パスを返す。"""
 
-    suffixes = dump_path.suffixes
-    if suffixes[-2:] == [".json", ".bz2"] or dump_path.suffix == ".bz2":
-        return bz2.open(dump_path, "rt", encoding="utf-8")
-    if suffixes[-2:] == [".json", ".gz"] or dump_path.suffix == ".gz":
-        return gzip.open(dump_path, "rt", encoding="utf-8")
-    return dump_path.open("r", encoding="utf-8")
+    digits = qid[1:]
+    first_digit = digits[0] if len(digits) >= 1 else "_"
+    second_digit = digits[1] if len(digits) >= 2 else "_"
+    return output_dir / first_digit / second_digit / f"{qid}.json"
 
 
-def iter_dump_entities(dump_path: Path) -> Iterator[dict]:
-    """Yield entity dictionaries from a Wikidata JSON dump. / Wikidata JSON dump から entity 辞書を順に返す。"""
+def filter_existing_qids(qids: set[str], output_dir: Path) -> set[str]:
+    """Skip QIDs that already have extracted JSON files. / 既存 JSON がある QID を抽出対象から除く。"""
 
-    with open_dump_text(dump_path) as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if not line or line in {"[", "]"}:
-                continue
-            if line.endswith(","):
-                line = line[:-1]
-            entity = json.loads(line)
-            if isinstance(entity, dict) and entity.get("id"):
-                yield entity
+    remaining = set(qids)
+    for qid in qids:
+        output_path = qid_to_json_path(output_dir, qid)
+        if output_path.exists() and output_path.stat().st_size > 0:
+            remaining.discard(qid)
+    return remaining
+
+
+def render_progress(scanned: int, written: int, target_total: int, remaining_count: int) -> None:
+    """Render one in-place progress line. / 進捗を 1 行上書きで表示する。"""
+
+    message = (
+        f"\rDump scan: {scanned:,} entities scanned | "
+        f"QIDs extracted: {written:,}/{target_total:,} | "
+        f"remaining: {remaining_count:,}"
+    )
+    sys.stderr.write(message)
+    sys.stderr.flush()
 
 
 def extract_entities_from_dump(input_path: Path, dump_path: Path, output_dir: Path) -> int:
@@ -58,23 +64,52 @@ def extract_entities_from_dump(input_path: Path, dump_path: Path, output_dir: Pa
         raise FileNotFoundError(f"Dump file does not exist: {dump_path}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    remaining = filter_existing_qids(target_qids, output_dir)
+    if not remaining:
+        print("All target QIDs already exist. Nothing to extract.", file=sys.stderr)
+        return 0
     written = 0
-    remaining = set(target_qids)
-    for entity in iter_dump_entities(dump_path):
+    scanned = 0
+    target_total = len(remaining)
+    last_progress_time = time.monotonic()
+    progress_interval_seconds = 3.0
+    print(
+        f"Start extracting {target_total} QIDs from dump: {dump_path}",
+        file=sys.stderr,
+    )
+    for entity in WikidataJsonDump(str(dump_path)):
+        scanned += 1
+        now = time.monotonic()
+        if scanned % 100000 == 0:
+            render_progress(scanned, written, target_total, len(remaining))
+            last_progress_time = now
+        elif now - last_progress_time >= progress_interval_seconds:
+            render_progress(scanned, written, target_total, len(remaining))
+            last_progress_time = now
         qid = entity.get("id", "")
         if qid not in remaining:
             continue
-        (output_dir / f"{qid}.json").write_text(
+        output_path = qid_to_json_path(output_dir, qid)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
             json.dumps(entity, ensure_ascii=False, separators=(",", ":")),
             encoding="utf-8",
         )
         remaining.remove(qid)
         written += 1
+        render_progress(scanned, written, target_total, len(remaining))
+        last_progress_time = time.monotonic()
         if not remaining:
             break
     if remaining:
+        sys.stderr.write("\n")
         missing = ", ".join(sorted(remaining)[:20])
         raise ValueError(f"Some QIDs were not found in dump: {missing}")
+    sys.stderr.write("\n")
+    print(
+        f"Completed extraction: scanned {scanned} entities, wrote {written} JSON files.",
+        file=sys.stderr,
+    )
     return written
 
 
@@ -88,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", default=str(paths.qids_tsv))
     parser.add_argument(
         "--dump",
-        default=str(paths.raw_wikidata_dir / "latest-all.json.bz2"),
+        default=str(paths.wikidata_dump_file),
         help="Path to a downloaded Wikidata JSON dump such as latest-all.json.bz2.",
     )
     parser.add_argument("--output-dir", default=str(paths.json_dir))

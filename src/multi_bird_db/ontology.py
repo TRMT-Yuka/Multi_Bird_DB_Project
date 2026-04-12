@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
+import pickle
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from .config import get_project_paths
 
-ONTOLOGY_COLUMNS = [
+ONTOLOGY_FIELDS = [
     "id",
     "entity_url",
     "en_name",
@@ -168,7 +168,7 @@ def validate_json_dir(json_dir: Path) -> list[Path]:
 
     if not json_dir.exists():
         raise FileNotFoundError(f"JSON directory does not exist: {json_dir}")
-    json_paths = sorted(json_dir.glob("Q*.json"))
+    json_paths = sorted(json_dir.rglob("Q*.json"))
     if not json_paths:
         raise FileNotFoundError(f"No JSON files found under: {json_dir}")
     return json_paths
@@ -198,7 +198,7 @@ def build_row(
     parent_map: dict[str, str],
     root_qid: str,
 ) -> dict[str, str]:
-    """Build one row for bird_ontology.tsv. / bird_ontology.tsv の 1 行分を作る。"""
+    """Build one row for bird_ontology.pkl. / bird_ontology.pkl の 1 件分を作る。"""
 
     rank_qid = get_claim_entity_id(entity, "P105")
     parent_qid = parent_map.get(qid, "")
@@ -231,25 +231,27 @@ def build_row(
 
 
 def build_ontology(json_dir: Path, output_path: Path, root_qid: str = "Q5113") -> None:
-    """Create bird_ontology.tsv from downloaded Wikidata JSON files. / 取得済み Wikidata JSON から bird_ontology.tsv を作る。"""
+    """Create bird_ontology.pkl from downloaded Wikidata JSON files. / 取得済み Wikidata JSON から bird_ontology.pkl を作る。"""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     entities_by_qid = collect_entities(json_dir)
     parent_map = build_parent_map(entities_by_qid)
-    with output_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, delimiter="\t", fieldnames=ONTOLOGY_COLUMNS)
-        writer.writeheader()
-        for qid in sorted(entities_by_qid):
-            writer.writerow(build_row(qid, entities_by_qid[qid], entities_by_qid, parent_map, root_qid))
+    rows = [
+        {field: row[field] for field in ONTOLOGY_FIELDS}
+        for qid in sorted(entities_by_qid)
+        for row in [build_row(qid, entities_by_qid[qid], entities_by_qid, parent_map, root_qid)]
+    ]
+    with output_path.open("wb") as handle:
+        pickle.dump(rows, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Create the CLI parser for ontology generation. / ontology 生成コマンド用の引数パーサを作る。"""
 
     paths = get_project_paths()
-    parser = argparse.ArgumentParser(description="Build Bird ontology TSV from Wikidata JSON.")
+    parser = argparse.ArgumentParser(description="Build Bird ontology PKL from Wikidata JSON.")
     parser.add_argument("--json-dir", default=str(paths.json_dir))
-    parser.add_argument("--output", default=str(paths.ontology_tsv))
+    parser.add_argument("--output", default=str(paths.ontology_pkl))
     parser.add_argument("--root-qid", default="Q5113")
     return parser
 

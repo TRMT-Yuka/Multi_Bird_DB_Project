@@ -29,8 +29,3 @@ conda_switch.sh
 # Legacy scratch outputs
 output/
 temp/
-
-# Local secrets
-.env
-.env.*
-!.env.example

@@ -1,19 +1,25 @@
 PYTHON ?= python3
 PYTHONPATH := src
 
-.PHONY: extract-qids generate-fetch extract-dump-json build-ontology build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology build-graph serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
 
-generate-fetch:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli generate-fetch
-
 extract-dump-json:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-dump-json
 
+download-wikidata-dump:
+	bash scripts/download_wikidata_dump.sh
+
 build-ontology:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-ontology
+
+build-graph:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-graph
+
+serve-graph:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli serve-graph
 
 build-wikipedia-manifest:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-wikipedia-manifest
