@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 
-from . import dump_extract, embeddings, graph, graph_dash, ontology, qids, wikipedia_articles
+from . import dump_extract, embeddings, graph, graph_dash, ontology, qids, sqlite_store, wikipedia_articles
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_arguments(
         subparsers.add_parser(
             "extract-dump-json",
-            help="Extract requested Wikidata entity JSON files from a downloaded dump.",
+            help="Materialize requested Wikidata entity JSON files by scanning the dump directly.",
         ),
         dump_extract.build_parser().parse_args([]),
         ["input", "dump", "output_dir"],
@@ -58,6 +58,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_arguments(
         subparsers.add_parser("build-graph", help="Build taxonomy graph PKL from ontology PKL."),
         graph.build_parser().parse_args([]),
+        ["input", "output", "root_qid"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "build-sqlite",
+            help="Build a lightweight SQLite DB from ontology PKL.",
+        ),
+        sqlite_store.build_parser().parse_args([]),
         ["input", "output", "root_qid"],
     )
     add_arguments(
@@ -131,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
         "extract-dump-json": (dump_extract.main, [], ["input", "dump", "output_dir"]),
         "build-ontology": (ontology.main, [], ["json_dir", "output", "root_qid"]),
         "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
+        "build-sqlite": (sqlite_store.main, [], ["input", "output", "root_qid"]),
         "build-embeddings": (
             embeddings.main,
             [],

@@ -25,7 +25,7 @@ data/                                     # このプロジェクトで扱う全
 └── external/                             # 文書・音声・埋め込みの保管先
     ├── documents/                        # 文書コーパス
     ├── audio/                            # 音声ファイルや音声メタデータ
-    │   └── data/                         # 音声ファイル本体の保存先
+    ├── sqlite/                           # 軽量な内部参照用 SQLite DB
     └── embeddings/                       # グラフ・テキスト・画像埋め込み
 ```
 
@@ -52,6 +52,8 @@ data/                                     # このプロジェクトで扱う全
   - taxonomy graph の node2vec 埋め込みです
 - `external/embeddings/graph/taxonomy/hgcn/`
   - taxonomy graph の HGCN 風ハイパボリック埋め込みです
+- `external/sqlite/taxonomy/bird_taxonomy.sqlite`
+  - taxonomy graph と ontology を引くための軽量 SQLite DB です
 
 生成順やコマンドは [README_wikidata_pred.md](../README_wikidata_pred.md) の「実行」「出力」を参照してください。
 

@@ -8,11 +8,12 @@
 4. `make extract-dump-json` で対象 QID の JSON を切り出す
 5. `make build-ontology` で ontology PKL を作る
 6. `make build-graph` で taxonomy graph PKL を作る
-7. `make build-embeddings` で graph 埋め込みを作る
-8. `make serve-graph` で taxonomy graph viewer を起動する
-9. `make build-wikipedia-manifest` で Wikipedia 記事一覧 TSV を作る
-10. `make fetch-wikipedia-xml` で英語版・日本語版記事 XML を保存する
-11. `make extract-wikipedia-text` で XML からテキストを抽出する
+7. `make build-sqlite` で taxonomy 用 SQLite DB を作る
+8. `make build-embeddings` で graph 埋め込みを作る
+9. `make serve-graph` で taxonomy graph viewer を起動する
+10. `make build-wikipedia-manifest` で Wikipedia 記事一覧 TSV を作る
+11. `make fetch-wikipedia-xml` で英語版・日本語版記事 XML を保存する
+12. `make extract-wikipedia-text` で XML からテキストを抽出する
 
 ## ディレクトリ構成
 
@@ -25,6 +26,7 @@ Multi_Bird_DB_Project/                    # プロジェクト全体のルート
 │   └── external/                        # モダリティ別に管理する外部データ
 │       ├── documents/                   # Wikipedia などの文書データ
 │       ├── audio/                       # 音声ファイルや音声メタデータ
+│       ├── sqlite/                      # 軽量な内部参照用 SQLite DB
 │       └── embeddings/                  # グラフ・文書・画像の埋め込み
 ├── docs/                                # 設計説明と作業メモ
 ├── queries/                             # データ取得元の SPARQL
@@ -51,6 +53,9 @@ data/                                     # このプロジェクトのデータ
 └── external/                             # 補助データと別モダリティの保管先
     ├── documents/                        # XML、抽出本文、将来の文書コーパス
     ├── audio/                            # 鳴き声音声と付随メタデータ
+    ├── sqlite/                            # 軽量な内部参照用 SQLite DB
+    │   └── taxonomy/
+    │       └── bird_taxonomy.sqlite       # taxonomy graph と ontology の参照用 DB
     └── embeddings/
         └── graph/
             └── taxonomy/
@@ -80,6 +85,8 @@ data/                                     # このプロジェクトのデータ
   - JSON から ontology PKL を生成する処理
 - `src/multi_bird_db/graph.py`
   - ontology PKL から taxonomy の NetworkX graph PKL を生成する処理
+- `src/multi_bird_db/sqlite_store.py`
+  - ontology PKL から taxonomy の SQLite DB を生成する処理
 - `src/multi_bird_db/embeddings.py`
   - graph PKL から埋め込みを生成して保存する処理
 - `src/multi_bird_db/graph_dash.py`
@@ -93,6 +100,7 @@ data/                                     # このプロジェクトのデータ
 - Wikidata dump から必要な QID の entity JSON を切り出す
 - 取得済み JSON から ontology PKL を生成する
 - ontology PKL から taxonomy graph PKL を生成する
+- ontology PKL から taxonomy SQLite DB を生成する
 - taxonomy graph PKL から node2vec / HGCN 風埋め込みを生成する
 
 ## 将来の拡張

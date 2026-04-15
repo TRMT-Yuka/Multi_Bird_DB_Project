@@ -100,7 +100,7 @@ pip install qwikidata
   - `make extract-qids`
 - 最新の Wikidata dump の取得　※取得ファイルは非常に重いので事前に容量を確保すること
   - `make download-wikidata-dump`
-- dump から対象 QID の JSON を切り出す
+- dump を直接走査して対象 QID の JSON を切り出す
   - `make extract-dump-json`
 - JSONから ontology PKL を作りたい場合
   - `make build-ontology`
@@ -215,9 +215,9 @@ make extract-dump-json
 
 JSON は、QID の数値部の 1 桁目と 2 桁目で階層化して保存します。たとえば `Q27614643` は `data/interim/wikidata/json/2/7/Q27614643.json` に保存されます。
 
-すでに対応パスに JSON が存在する QID は自動でスキップします。途中で処理が中断した場合も、`make extract-dump-json` を再実行すれば未生成分だけ続きを進められます。
+`make extract-dump-json` は、`latest-all.json.bz2` を直接走査して対象 QID の JSON を取り出します。出力は `data/interim/wikidata/json/<1桁目>/<2桁目>/Qxxxx.json` で、既に同じ JSON が存在する場合は上書きしません。
 
-実行中は標準エラー出力に進捗を 1 行上書きで表示します。ターミナルが進捗行で埋め尽くされないようにしてあります。
+JSON は一時ファイル経由で原子的に書き込むため、途中停止で壊れにくくなっています。実行中は標準エラー出力に簡単な進捗を表示します。
 
 
 ### 5. ontology PKL を作る
@@ -418,7 +418,7 @@ make build-wikipedia-manifest
 - [src/multi_bird_db/qids.py](src/multi_bird_db/qids.py)
   - `query.tsv` から QID 一覧を作ります
 - [src/multi_bird_db/dump_extract.py](src/multi_bird_db/dump_extract.py)
-  - dump から必要な QID の JSON を切り出します
+  - dump の直接走査で JSON を切り出します
 - [src/multi_bird_db/ontology.py](src/multi_bird_db/ontology.py)
   - 取得済み JSON から `bird_ontology.pkl` を作ります
 - [src/multi_bird_db/graph.py](src/multi_bird_db/graph.py)

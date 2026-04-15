@@ -31,6 +31,8 @@ class ProjectPaths:
     taxonomy_graph_html_dir: Path
     embeddings_dir: Path
     graph_embeddings_dir: Path
+    sqlite_dir: Path
+    taxonomy_sqlite_path: Path
     wikipedia_manifest_tsv: Path
 
 
@@ -45,6 +47,7 @@ def get_project_paths() -> ProjectPaths:
     embeddings_dir = root / "data" / "external" / "embeddings"
     graph_dir = processed_dir / "graph"
     documents_dir = root / "data" / "external" / "documents"
+    sqlite_dir = root / "data" / "external" / "sqlite"
     wikipedia_dir = documents_dir / "wikipedia"
     wikipedia_xml_dir = wikipedia_dir / "xml"
     wikipedia_text_dir = wikipedia_dir / "text"
@@ -72,5 +75,7 @@ def get_project_paths() -> ProjectPaths:
         taxonomy_graph_html_dir=graph_dir / "dash",
         embeddings_dir=embeddings_dir,
         graph_embeddings_dir=embeddings_dir / "graph",
+        sqlite_dir=sqlite_dir,
+        taxonomy_sqlite_path=sqlite_dir / "taxonomy" / "bird_taxonomy.sqlite",
         wikipedia_manifest_tsv=processed_dir / "wikipedia_article_manifest.tsv",
     )

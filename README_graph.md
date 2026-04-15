@@ -8,7 +8,7 @@ Bird (`Q5113`) 配下の ontology PKL を入力にして、親子分類関係を
 - 各 QID を 1 ノードとして扱う
 - `parent_taxon -> id` を taxonomy の有向エッジとして扱う
 - 各ノードには英語ラベルと分類属性を保持する
-- 出力は `networkx.DiGraph` の PKL と Dash Cytoscape viewer に対応する
+- 出力は `networkx.DiGraph` の PKL、SQLite DB、Dash Cytoscape viewer に対応する
 
 ## 最初に読む場所
 
@@ -72,6 +72,8 @@ Bird (`Q5113`) 配下の ontology PKL を入力にして、親子分類関係を
 
 - taxonomy graph PKL を作りたい場合
   - `make build-graph`
+- taxonomy graph SQLite を作りたい場合
+  - `make build-sqlite`
 - taxonomy graph 埋め込みを作りたい場合
   - `make build-embeddings`
 - taxonomy graph をインタラクティブに観察したい場合
@@ -113,7 +115,27 @@ make build-graph
 
 このコマンドは `bird_ontology.pkl` を読み、`parent_taxon -> id` の有向エッジを持つ graph を構築して保存します。
 
-### 3. taxonomy graph 埋め込みを作る
+### 3. taxonomy graph SQLite を作る
+
+```bash
+make build-sqlite
+```
+
+前提ファイル:
+- `data/processed/bird_ontology.pkl`
+
+`bird_ontology.pkl` がまだない場合は、先に [README_wikidata_pred.md](README_wikidata_pred.md) の `make build-ontology` を実行してください。
+
+実行される処理:
+- [src/multi_bird_db/cli.py](src/multi_bird_db/cli.py)
+- [src/multi_bird_db/sqlite_store.py](src/multi_bird_db/sqlite_store.py)
+
+生成物:
+- `data/external/sqlite/taxonomy/bird_taxonomy.sqlite`
+
+この SQLite は ontology の各行を `qid` 主キーで引ける軽量ストアです。`nodes` と `edges` を持つので、親子関係の参照や `qid` ごとのメタデータ取得に使えます。
+
+### 4. taxonomy graph 埋め込みを作る
 
 ```bash
 make build-embeddings
@@ -134,7 +156,7 @@ make build-embeddings
 
 このコマンドは taxonomy graph PKL を入力にして、`qid` をキーに参照できる埋め込みを保存します。`node2vec` と `hgcn` は同じ graph を使いますが、生成するベクトルの意味づけが異なります。
 
-### 4. taxonomy graph を Dash Cytoscape で観察する
+### 5. taxonomy graph を Dash Cytoscape で観察する
 
 ```bash
 make serve-graph
