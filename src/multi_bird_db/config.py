@@ -25,6 +25,7 @@ class ProjectPaths:
     wikidata_dump_file: Path
     qids_tsv: Path
     json_dir: Path
+    dump_extract_checkpoint: Path
     ontology_pkl: Path
     graph_dir: Path
     taxonomy_graph_pkl: Path
@@ -69,6 +70,7 @@ def get_project_paths() -> ProjectPaths:
         wikidata_dump_file=wikidata_dump_dir / "latest-all.json.bz2",
         qids_tsv=interim_wikidata_dir / "bird_qids.tsv",
         json_dir=interim_wikidata_dir / "json",
+        dump_extract_checkpoint=interim_wikidata_dir / "local_dump_extract_checkpoint.json",
         ontology_pkl=processed_dir / "bird_ontology.pkl",
         graph_dir=graph_dir,
         taxonomy_graph_pkl=graph_dir / "bird_taxonomy_graph.pkl",

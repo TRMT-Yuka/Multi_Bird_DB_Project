@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from qwikidata.json_dump import WikidataJsonDump
@@ -60,7 +61,67 @@ def write_json_atomically(output_path: Path, entity: dict) -> None:
                 pass
 
 
-def extract_entities_from_dump(input_path: Path, dump_path: Path, output_dir: Path) -> int:
+def load_checkpoint(checkpoint_path: Path) -> set[str]:
+    """Load completed QIDs from a checkpoint file. / チェックポイントから完了済み QID を読む。"""
+
+    if not checkpoint_path.exists():
+        return set()
+    payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    completed = payload.get("completed_qids", [])
+    if not isinstance(completed, list):
+        raise ValueError(f"Invalid checkpoint format: {checkpoint_path}")
+    return {str(qid).strip() for qid in completed if str(qid).strip()}
+
+
+def save_checkpoint(checkpoint_path: Path, completed_qids: set[str]) -> None:
+    """Persist completed QIDs atomically. / 完了済み QID を原子的に保存する。"""
+
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "completed_qids": sorted(completed_qids),
+    }
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=checkpoint_path.parent,
+            prefix=f".{checkpoint_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temp_path.replace(checkpoint_path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
+
+
+def load_completed_outputs(target_qids: list[str], output_dir: Path) -> set[str]:
+    """Return QIDs that already have extracted JSON files. / 既に抽出済みの QID を返す。"""
+
+    completed_qids: set[str] = set()
+    for qid in target_qids:
+        if qid_to_json_path(output_dir, qid).exists():
+            completed_qids.add(qid)
+    return completed_qids
+
+
+def extract_entities_from_dump(
+    input_path: Path,
+    dump_path: Path,
+    output_dir: Path,
+    checkpoint_path: Path | None = None,
+) -> int:
     """Materialize per-QID JSON files by scanning the dump directly.
 
     / dump を直接走査して、QID ごとの JSON を生成する。
@@ -73,26 +134,36 @@ def extract_entities_from_dump(input_path: Path, dump_path: Path, output_dir: Pa
     if not target_qids:
         return 0
 
-    remaining = set(target_qids)
+    if checkpoint_path is None:
+        checkpoint_path = get_project_paths().dump_extract_checkpoint
+
+    completed_qids = load_checkpoint(checkpoint_path)
+    completed_qids.update(load_completed_outputs(target_qids, output_dir))
+    remaining_qids = set(target_qids)
+    remaining_qids.difference_update(completed_qids)
     written = 0
     output_dir.mkdir(parents=True, exist_ok=True)
+    save_checkpoint(checkpoint_path, completed_qids)
 
     for entity in WikidataJsonDump(str(dump_path)):
         qid = str(entity.get("id", "")).strip()
-        if qid not in remaining:
+        if qid not in remaining_qids:
             continue
         output_path = qid_to_json_path(output_dir, qid)
         if not output_path.exists():
             write_json_atomically(output_path, entity)
             written += 1
-        remaining.discard(qid)
-        if not remaining:
+        completed_qids.add(qid)
+        remaining_qids.discard(qid)
+        save_checkpoint(checkpoint_path, completed_qids)
+        if not remaining_qids:
             break
 
-    if remaining:
-        missing_preview = ", ".join(sorted(remaining)[:20])
+    if remaining_qids:
+        missing_preview = ", ".join(sorted(remaining_qids)[:20])
         raise ValueError(f"Some QIDs were not found in dump: {missing_preview}")
 
+    save_checkpoint(checkpoint_path, completed_qids)
     return written
 
 
@@ -104,6 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", default=str(paths.qids_tsv))
     parser.add_argument("--dump", default=str(paths.wikidata_dump_file))
     parser.add_argument("--output-dir", default=str(paths.json_dir))
+    parser.add_argument("--checkpoint", default=str(paths.dump_extract_checkpoint))
     return parser
 
 
@@ -111,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the dump extraction command. / dump 抽出コマンドを実行する。"""
 
     args = build_parser().parse_args(argv)
-    extract_entities_from_dump(Path(args.input), Path(args.dump), Path(args.output_dir))
+    extract_entities_from_dump(Path(args.input), Path(args.dump), Path(args.output_dir), Path(args.checkpoint))
     return 0
 
 

@@ -160,4 +160,5 @@ graph metadata:
 - 生成条件、次元数、モデル名、生成日時などのメタ情報を残す
 - 大容量データは Git に直接入れず、配置先と取得手順だけを記録する
 - `interim/wikidata/json/<1桁目>/<2桁目>/Qxxxx.json` は中間生成物として扱う
+- `interim/wikidata/local_dump_extract_checkpoint.json` は個人用の再開状態であり、Git に入れないローカルファイルとして扱う
 - `processed/` は下流利用の成果物を置く
