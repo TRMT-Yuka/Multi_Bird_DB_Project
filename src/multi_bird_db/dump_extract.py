@@ -4,7 +4,9 @@ import argparse
 import csv
 import json
 import os
+import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -106,6 +108,18 @@ def save_checkpoint(checkpoint_path: Path, completed_qids: set[str]) -> None:
                 pass
 
 
+def render_progress(scanned: int, completed_count: int, target_total: int, remaining_count: int) -> None:
+    """Render one in-place progress line. / 進捗を 1 行上書きで表示する。"""
+
+    message = (
+        f"\rDump scan: {scanned:,} entities scanned | "
+        f"QIDs extracted: {completed_count:,}/{target_total:,} | "
+        f"remaining: {remaining_count:,}"
+    )
+    sys.stderr.write(message)
+    sys.stderr.flush()
+
+
 def load_completed_outputs(target_qids: list[str], output_dir: Path) -> set[str]:
     """Return QIDs that already have extracted JSON files. / 既に抽出済みの QID を返す。"""
 
@@ -141,11 +155,27 @@ def extract_entities_from_dump(
     completed_qids.update(load_completed_outputs(target_qids, output_dir))
     remaining_qids = set(target_qids)
     remaining_qids.difference_update(completed_qids)
+    if not remaining_qids:
+        print("All target QIDs already exist. Nothing to extract.", file=sys.stderr)
+        return 0
     written = 0
+    scanned = 0
+    target_total = len(target_qids)
+    last_progress_time = time.monotonic()
+    progress_interval_seconds = 3.0
     output_dir.mkdir(parents=True, exist_ok=True)
     save_checkpoint(checkpoint_path, completed_qids)
+    print(
+        f"Start extracting {len(remaining_qids):,} QIDs from dump: {dump_path}",
+        file=sys.stderr,
+    )
 
     for entity in WikidataJsonDump(str(dump_path)):
+        scanned += 1
+        now = time.monotonic()
+        if scanned % 100000 == 0 or now - last_progress_time >= progress_interval_seconds:
+            render_progress(scanned, len(completed_qids), target_total, len(remaining_qids))
+            last_progress_time = now
         qid = str(entity.get("id", "")).strip()
         if qid not in remaining_qids:
             continue
@@ -156,14 +186,22 @@ def extract_entities_from_dump(
         completed_qids.add(qid)
         remaining_qids.discard(qid)
         save_checkpoint(checkpoint_path, completed_qids)
+        render_progress(scanned, len(completed_qids), target_total, len(remaining_qids))
+        last_progress_time = time.monotonic()
         if not remaining_qids:
             break
 
     if remaining_qids:
+        sys.stderr.write("\n")
         missing_preview = ", ".join(sorted(remaining_qids)[:20])
         raise ValueError(f"Some QIDs were not found in dump: {missing_preview}")
 
     save_checkpoint(checkpoint_path, completed_qids)
+    sys.stderr.write("\n")
+    print(
+        f"Completed extraction: scanned {scanned:,} entities, wrote {written:,} JSON files.",
+        file=sys.stderr,
+    )
     return written
 
 

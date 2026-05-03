@@ -63,7 +63,7 @@ data/                                     # このプロジェクトで扱う全
 
 列定義は [README_wikidata_pred.md](../README_wikidata_pred.md) にもあります。ここではデータ配置の観点で再掲します。
 
-- `id`
+- `qid`
   - Wikidata の QID です
 - `entity_url`
   - Wikidata エンティティの URL です

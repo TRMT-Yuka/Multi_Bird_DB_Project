@@ -1,27 +1,29 @@
 # Multi_Bird_DB_Project
 
-このリポジトリは、鳥類データを複数モダリティで扱うための入口です。現在は Wikidata を中心とした事前データダウンロードと前処理を先に整備しています。
+このリポジトリは、鳥類データを複数モダリティで扱うための入口です。現在は `Wikidata 側` の前処理と `graph 側` の構築を分けて整備しています。
 
 ## README 一覧
 
 - [README_wikidata_pred.md](README_wikidata_pred.md)
-  - Wikidata dump、ontology PKL、Wikipedia 記事一覧までの現在の主処理です
+  - `Wikidata 側` の処理です。dump の取得、JSON 抽出、ontology PKL 生成までを扱います
 - [README_graph.md](README_graph.md)
-  - ontology PKL から taxonomy graph を構築し、SQLite・埋め込み生成・Dash viewer で観察する処理です
+  - `graph 側` の処理です。ontology PKL から taxonomy graph を構築し、埋め込み生成・Dash viewer で観察します
 - [README_audio.md](README_audio.md)
   - 音声データの配置方針と今後の処理整理です
+- [README_language.md](README_language.md)
+  - 言語単位の ID と埋め込みの対応付けを整理するメモです
 
 ## 現在の実装状況
 
 - 実装済み
-  - Wikidata dump の取得
-  - dump から対象 QID の JSON 抽出
-  - ontology PKL 生成
-  - taxonomy graph PKL 生成
-  - taxonomy graph SQLite 生成
-  - taxonomy graph からの埋め込み生成
-  - taxonomy graph の Dash viewer
-  - Wikipedia 記事 manifest 生成
+  - `Wikidata 側`
+    - Wikidata dump の取得
+    - dump から対象 QID の JSON 抽出
+    - ontology PKL 生成
+  - `graph 側`
+    - taxonomy graph PKL 生成
+    - taxonomy graph からの埋め込み生成
+    - taxonomy graph の Dash viewer
 - 未実装または今後整理
   - 音声データ処理
 

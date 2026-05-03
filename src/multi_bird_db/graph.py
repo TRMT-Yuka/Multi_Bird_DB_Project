@@ -28,6 +28,7 @@ def build_node_attributes(row: dict[str, Any], qid: str) -> dict[str, Any]:
     label_en = str(row.get("en_name") or row.get("taxon_name") or qid).strip() or qid
     label_ja = str(row.get("ja_name") or "").strip()
     return {
+        "qid": qid,
         "label_en": label_en,
         "label_ja": label_ja,
         "en_name": str(row.get("en_name") or "").strip(),
@@ -53,19 +54,20 @@ def build_taxonomy_graph(
     graph.graph["root_qid"] = root_qid
 
     for row in ontology_rows:
-        qid = str(row.get("id", "")).strip()
+        qid = str(row.get("qid") or row.get("id") or "").strip()
         if not qid:
             continue
         graph.add_node(qid, **build_node_attributes(row, qid))
 
     for row in ontology_rows:
-        child_qid = str(row.get("id", "")).strip()
+        child_qid = str(row.get("qid") or row.get("id") or "").strip()
         parent_qid = str(row.get("parent_taxon") or "").strip()
         if not child_qid or not parent_qid:
             continue
         if parent_qid not in graph:
             graph.add_node(
                 parent_qid,
+                qid=parent_qid,
                 label_en=parent_qid,
                 label_ja="",
                 en_name="",

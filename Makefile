@@ -1,8 +1,9 @@
 PYTHON ?= python3
 PYTHONPATH := src
 EXTRACT_DUMP_JSON_ARGS ?=
+EMBEDDING_ALGORITHM ?= node2vec
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology build-graph build-sqlite build-embeddings serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grac-embeddings build-transe-embeddings build-language-surface-manifest build-language-embeddings check-gpu visualize-graph serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -19,11 +20,35 @@ build-ontology:
 build-graph:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-graph
 
+visualize-graph:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.graph_visualization
+
 build-sqlite:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-sqlite
 
 build-embeddings:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm $(EMBEDDING_ALGORITHM)
+
+build-node2vec-embeddings:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm node2vec
+
+build-gcn-embeddings:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm gcn
+
+build-grac-embeddings:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm grac
+
+build-transe-embeddings:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm transe
+
+build-language-surface-manifest:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-language-surface-manifest
+
+build-language-embeddings:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-language-embeddings
+
+check-gpu:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli check-gpu
 
 serve-graph:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli serve-graph

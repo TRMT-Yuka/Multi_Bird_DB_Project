@@ -16,6 +16,14 @@ dependencies = [
     "numpy",
 ]
 
+[project.optional-dependencies]
+language-bert = [
+    "fugashi",
+    "unidic-lite",
+    "torch",
+    "transformers",
+]
+
 [project.scripts]
 multi-bird-db = "multi_bird_db.cli:main"
 

@@ -97,7 +97,7 @@ def _insert_metadata(conn: sqlite3.Connection, entries: dict[str, str]) -> None:
 def _insert_nodes(conn: sqlite3.Connection, ontology_rows: Iterable[dict[str, Any]]) -> int:
     rows = []
     for row in ontology_rows:
-        qid = str(row.get("id", "")).strip()
+        qid = str(row.get("qid") or row.get("id") or "").strip()
         if not qid:
             continue
         rows.append(
@@ -141,7 +141,7 @@ def _insert_nodes(conn: sqlite3.Connection, ontology_rows: Iterable[dict[str, An
 def _insert_edges(conn: sqlite3.Connection, ontology_rows: Iterable[dict[str, Any]]) -> int:
     rows = []
     for row in ontology_rows:
-        child_qid = str(row.get("id", "")).strip()
+        child_qid = str(row.get("qid") or row.get("id") or "").strip()
         parent_qid = str(row.get("parent_taxon") or "").strip()
         if not child_qid or not parent_qid:
             continue

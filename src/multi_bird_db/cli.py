@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 from collections.abc import Callable
 
-from . import dump_extract, embeddings, graph, graph_dash, ontology, qids, sqlite_store, wikipedia_articles
+from . import dump_extract, embeddings, graph, graph_dash, language_embeddings, ontology, qids, sqlite_store, wikipedia_articles
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
@@ -23,12 +24,21 @@ def namespace_to_args(args: argparse.Namespace, names: list[str]) -> list[str]:
     flat_args: list[str] = []
     for name in names:
         value = getattr(args, name)
+        if value is None:
+            continue
         if isinstance(value, bool):
             if value:
                 flat_args.append(f"--{name.replace('_', '-')}")
             continue
         flat_args.extend([f"--{name.replace('_', '-')}", str(value)])
     return flat_args
+
+
+def print_cuda_report(_: list[str] | None = None) -> int:
+    """Print a small CUDA environment report. / CUDA 環境の簡易レポートを出す。"""
+
+    print(json.dumps(language_embeddings.probe_cuda(), ensure_ascii=False, indent=2))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -94,6 +104,26 @@ def build_parser() -> argparse.ArgumentParser:
             "curvature",
             "root_qid",
         ],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "build-language-surface-manifest",
+            help="Build per-language surface_id-to-text manifests from bird ontology PKL.",
+        ),
+        language_embeddings.build_parser().parse_args([]),
+        ["input", "output_dir"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "build-language-embeddings",
+            help="Build BERT-based language embeddings from bird ontology PKL.",
+        ),
+        language_embeddings.build_embeddings_parser().parse_args([]),
+        ["input", "output_dir", "english_model", "japanese_model", "batch_size", "max_length", "device"],
+    )
+    subparsers.add_parser(
+        "check-gpu",
+        help="Print a small CUDA / torch environment report.",
     )
     add_arguments(
         subparsers.add_parser(
@@ -164,6 +194,17 @@ def main(argv: list[str] | None = None) -> int:
                 "root_qid",
             ],
         ),
+        "build-language-surface-manifest": (
+            language_embeddings.main,
+            [],
+            ["input", "output_dir"],
+        ),
+        "build-language-embeddings": (
+            language_embeddings.main_embeddings,
+            [],
+            ["input", "output_dir", "english_model", "japanese_model", "batch_size", "max_length", "device"],
+        ),
+        "check-gpu": (print_cuda_report, [], []),
         "serve-graph": (
             graph_dash.main,
             [],

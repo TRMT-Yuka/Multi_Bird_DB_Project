@@ -89,7 +89,7 @@ def build_wikipedia_manifest(
     rows: list[dict[str, str]] = []
     for json_path in validate_json_dir(json_dir):
         entity = load_entity(json_path)
-        if not (qid := entity.get("id", "")):
+        if not (qid := (entity.get("qid") or entity.get("id") or "")):
             continue
         if en_title := get_sitelink_title(entity, "enwiki"):
             rows.append(build_manifest_row(qid, en_title, "en", xml_en_dir, text_en_dir))

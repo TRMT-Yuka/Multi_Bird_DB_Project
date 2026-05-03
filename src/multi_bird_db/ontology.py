@@ -10,7 +10,7 @@ from urllib.parse import quote
 from .config import get_project_paths
 
 ONTOLOGY_FIELDS = [
-    "id",
+    "qid",
     "entity_url",
     "en_name",
     "ja_name",
@@ -180,7 +180,7 @@ def collect_entities(json_dir: Path) -> dict[str, dict[str, Any]]:
     entities: dict[str, dict[str, Any]] = {}
     for json_path in validate_json_dir(json_dir):
         entity = load_entity(json_path)
-        if qid := entity.get("id", ""):
+        if qid := (entity.get("qid") or entity.get("id") or ""):
             entities[qid] = entity
     return entities
 
@@ -207,7 +207,7 @@ def build_row(
     enwiki_title = get_sitelink_title(entity, "enwiki")
     jawiki_title = get_sitelink_title(entity, "jawiki")
     return {
-        "id": qid,
+        "qid": qid,
         "entity_url": f"https://www.wikidata.org/entity/{qid}",
         "en_name": get_label(entity, "en"),
         "ja_name": get_label(entity, "ja"),
