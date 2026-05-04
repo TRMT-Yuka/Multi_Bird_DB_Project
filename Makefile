@@ -3,7 +3,7 @@ PYTHONPATH := src
 EXTRACT_DUMP_JSON_ARGS ?=
 EMBEDDING_ALGORITHM ?= node2vec
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grac-embeddings build-transe-embeddings build-language-surface-manifest build-language-embeddings check-gpu visualize-graph serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-audio build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grac-embeddings build-transe-embeddings build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -17,11 +17,14 @@ download-wikidata-dump:
 build-ontology:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-ontology
 
+extract-xeno-canto-ids:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-xeno-canto-ids
+
+fetch-xeno-canto-audio:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli fetch-xeno-canto-audio
+
 build-graph:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-graph
-
-visualize-graph:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.graph_visualization
 
 build-sqlite:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-sqlite

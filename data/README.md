@@ -9,9 +9,11 @@
 ```text
 data/                                     # このプロジェクトで扱う全データのルート
 ├── raw/                                  # 外部から取得した未加工データ
-│   └── wikidata/                         # Wikidata の入力領域
-│       ├── query.tsv                     # Bird 配下の entity URL 一覧
-│       └── dumps/                        # Wikidata JSON dump の保存先
+│   ├── wikidata/                         # Wikidata の入力領域
+│   │   ├── query.tsv                     # Bird 配下の entity URL 一覧
+│   │   └── dumps/                        # Wikidata JSON dump の保存先
+│   └── xeno-canto/                       # Xeno-canto の生音声保存先
+│       └── after_202505/                 # 2025-05 以降の録音を QID ごとに保存
 ├── interim/                              # 処理途中で生成される中間データ
 │   └── wikidata/                         # Wikidata の処理作業領域
 │       ├── bird_qids.tsv                 # QID 抽出結果
@@ -35,8 +37,14 @@ data/                                     # このプロジェクトで扱う全
   - 手動で取得して配置する Bird 配下 entity の入力 TSV です
 - `raw/wikidata/dumps/latest-all.json.bz2`
   - Wikidata 全量 JSON dump です
+- `raw/xeno-canto/after_202505/<qid>/`
+  - Xeno-canto から取得した生音声ファイルです
+- `raw/xeno-canto/after_202505/audio_manifest.tsv`
+  - `qid` ごとに取得した音声ファイルの一覧です
 - `interim/wikidata/bird_qids.tsv`
   - `query.tsv` から抽出した QID 一覧です
+- `interim/wikidata/bird_xeno_canto_ids.tsv`
+  - ontology から抜き出した `qid` と `xeno_canto_species_id` の対応表です
 - `interim/wikidata/json/Qxxxx.json`
   - dump から切り出した個別 entity JSON です
   - 実際には `interim/wikidata/json/<1桁目>/<2桁目>/Qxxxx.json` の階層で保存します
@@ -48,10 +56,16 @@ data/                                     # このプロジェクトで扱う全
   - Dash Cytoscape viewer 用の graph モダリティ作業領域です
 - `processed/wikipedia_article_manifest.tsv`
   - Wikipedia XML とテキストの保存先を管理する一覧です
-- `external/embeddings/graph/taxonomy/node2vec/`
-  - taxonomy graph の node2vec 埋め込みです
-- `external/embeddings/graph/taxonomy/hgcn/`
-  - taxonomy graph の HGCN 風ハイパボリック埋め込みです
+- `external/embeddings/graph/node2vec/`
+  - graph の node2vec 埋め込みです
+- `external/embeddings/graph/gcn/`
+  - graph の GCN 埋め込みです
+- `external/embeddings/graph/grac/`
+  - graph の GRAC 埋め込みです
+- `external/embeddings/graph/transe/`
+  - graph の TransE 埋め込みです
+- `external/embeddings/graph/hgcn/`
+  - graph の HGCN 風ハイパボリック埋め込みです
 - `external/sqlite/taxonomy/bird_taxonomy.sqlite`
   - taxonomy graph と ontology を引くための軽量 SQLite DB です
 
@@ -161,4 +175,6 @@ graph metadata:
 - 大容量データは Git に直接入れず、配置先と取得手順だけを記録する
 - `interim/wikidata/json/<1桁目>/<2桁目>/Qxxxx.json` は中間生成物として扱う
 - `interim/wikidata/local_dump_extract_checkpoint.json` は個人用の再開状態であり、Git に入れないローカルファイルとして扱う
+- `interim/wikidata/bird_xeno_canto_ids.tsv` は `bird_ontology.pkl` から再生成できる中間成果物として扱う
+- `raw/xeno-canto/after_202505/` は Xeno-canto から取得した生音声の置き場として扱う
 - `processed/` は下流利用の成果物を置く

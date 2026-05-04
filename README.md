@@ -7,7 +7,7 @@
 - [README_wikidata_pred.md](README_wikidata_pred.md)
   - `Wikidata 側` の処理です。dump の取得、JSON 抽出、ontology PKL 生成までを扱います
 - [README_graph.md](README_graph.md)
-  - `graph 側` の処理です。ontology PKL から taxonomy graph を構築し、埋め込み生成・Dash viewer で観察します
+  - `graph 側` の処理です。ontology PKL から graph を構築し、埋め込み生成・Dash viewer で観察します
 - [README_audio.md](README_audio.md)
   - 音声データの配置方針と今後の処理整理です
 - [README_language.md](README_language.md)
@@ -22,7 +22,7 @@
     - ontology PKL 生成
   - `graph 側`
     - taxonomy graph PKL 生成
-    - taxonomy graph からの埋め込み生成
+    - graph からの埋め込み生成
     - taxonomy graph の Dash viewer
 - 未実装または今後整理
   - 音声データ処理

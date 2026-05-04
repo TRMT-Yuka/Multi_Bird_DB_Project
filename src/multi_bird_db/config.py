@@ -24,6 +24,7 @@ class ProjectPaths:
     wikidata_dump_dir: Path
     wikidata_dump_file: Path
     qids_tsv: Path
+    xeno_canto_ids_tsv: Path
     json_dir: Path
     dump_extract_checkpoint: Path
     ontology_pkl: Path
@@ -32,6 +33,11 @@ class ProjectPaths:
     taxonomy_graph_html_dir: Path
     embeddings_dir: Path
     graph_embeddings_dir: Path
+    raw_audio_dir: Path
+    xeno_canto_raw_dir: Path
+    xeno_canto_after_202505_dir: Path
+    audio_dir: Path
+    xeno_canto_audio_dir: Path
     sqlite_dir: Path
     taxonomy_sqlite_path: Path
     wikipedia_manifest_tsv: Path
@@ -46,6 +52,9 @@ def get_project_paths() -> ProjectPaths:
     interim_wikidata_dir = root / "data" / "interim" / "wikidata"
     processed_dir = root / "data" / "processed"
     embeddings_dir = root / "data" / "external" / "embeddings"
+    raw_audio_dir = root / "data" / "raw" / "audio"
+    xeno_canto_raw_dir = root / "data" / "raw" / "xeno-canto"
+    audio_dir = root / "data" / "external" / "audio"
     graph_dir = processed_dir / "graph"
     documents_dir = root / "data" / "external" / "documents"
     sqlite_dir = root / "data" / "external" / "sqlite"
@@ -69,6 +78,7 @@ def get_project_paths() -> ProjectPaths:
         wikidata_dump_dir=wikidata_dump_dir,
         wikidata_dump_file=wikidata_dump_dir / "latest-all.json.bz2",
         qids_tsv=interim_wikidata_dir / "bird_qids.tsv",
+        xeno_canto_ids_tsv=interim_wikidata_dir / "bird_xeno_canto_ids.tsv",
         json_dir=interim_wikidata_dir / "json",
         dump_extract_checkpoint=interim_wikidata_dir / "local_dump_extract_checkpoint.json",
         ontology_pkl=processed_dir / "bird_ontology.pkl",
@@ -77,6 +87,11 @@ def get_project_paths() -> ProjectPaths:
         taxonomy_graph_html_dir=graph_dir / "dash",
         embeddings_dir=embeddings_dir,
         graph_embeddings_dir=embeddings_dir / "graph",
+        raw_audio_dir=raw_audio_dir,
+        xeno_canto_raw_dir=xeno_canto_raw_dir,
+        xeno_canto_after_202505_dir=xeno_canto_raw_dir / "after_202505",
+        audio_dir=audio_dir,
+        xeno_canto_audio_dir=audio_dir / "xeno-canto",
         sqlite_dir=sqlite_dir,
         taxonomy_sqlite_path=sqlite_dir / "taxonomy" / "bird_taxonomy.sqlite",
         wikipedia_manifest_tsv=processed_dir / "wikipedia_article_manifest.tsv",

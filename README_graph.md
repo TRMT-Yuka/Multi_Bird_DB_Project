@@ -73,7 +73,7 @@
 
 - taxonomy graph PKL を作りたい場合
   - `make build-graph`
-- taxonomy graph 埋め込みを個別に作りたい場合
+- graph 埋め込みを個別に作りたい場合
   - `make build-node2vec-embeddings`
   - `make build-gcn-embeddings`
   - `make build-grac-embeddings`
@@ -119,7 +119,7 @@ make build-graph
 
 このコマンドは `bird_ontology.pkl` を読み、`parent_taxon -> qid` の有向エッジを持つ graph を構築して保存します。
 
-### 3. taxonomy graph 埋め込みを作る
+### 3. graph 埋め込みを作る
 
 ```bash
 make build-embeddings
@@ -135,12 +135,13 @@ make build-embeddings
 - [src/multi_bird_db/embeddings.py](src/multi_bird_db/embeddings.py)
 
 生成物:
-- `data/external/embeddings/graph/taxonomy/node2vec/`
-- `data/external/embeddings/graph/taxonomy/gcn/`
-- `data/external/embeddings/graph/taxonomy/grac/`
-- `data/external/embeddings/graph/taxonomy/transe/`
+- `data/external/embeddings/graph/node2vec/`
+- `data/external/embeddings/graph/gcn/`
+- `data/external/embeddings/graph/grac/`
+- `data/external/embeddings/graph/transe/`
+- `data/external/embeddings/graph/hgcn/`
 
-このコマンドは taxonomy graph PKL を入力にして、`qid` をキーに参照できる埋め込みを保存します。`node2vec` は walk ベース、`gcn` は平滑化ベース、`grac` は attention 付き平滑化、`transe` は知識グラフ埋め込みとして学習します。
+このコマンドは graph PKL を入力にして、`qid` をキーに参照できる埋め込みを保存します。`node2vec` は walk ベース、`gcn` は平滑化ベース、`grac` は attention 付き平滑化、`transe` は知識グラフ埋め込みとして学習します。
 
 `node2vec` の公式実装の既定値は概ね `dimensions=128`、`walk_length=80`、`num_walks=10`、`p=1`、`q=1`、`workers=1` です。  
 このリポジトリの `node2vec` は自前実装で、今の既定値は `dim=64`、`walk_length=20`、`num_walks=10`、`window_size=5`、`negative_samples=5`、`epochs=2` になっています。重く感じる場合は `walk_length`、`num_walks`、`negative_samples`、`epochs` をまず下げるのが効果的です。

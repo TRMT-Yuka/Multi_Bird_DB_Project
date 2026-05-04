@@ -4,7 +4,7 @@ import argparse
 import json
 from collections.abc import Callable
 
-from . import dump_extract, embeddings, graph, graph_dash, language_embeddings, ontology, qids, sqlite_store, wikipedia_articles
+from . import dump_extract, embeddings, graph, graph_dash, language_embeddings, ontology, qids, sqlite_store, wikipedia_articles, xeno_canto_audio, xeno_canto_ids
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
@@ -64,6 +64,22 @@ def build_parser() -> argparse.ArgumentParser:
         subparsers.add_parser("build-ontology", help="Build ontology PKL from downloaded JSON."),
         ontology.build_parser().parse_args([]),
         ["json_dir", "output", "root_qid"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "extract-xeno-canto-ids",
+            help="Extract qid-to-Xeno-canto species ID pairs from ontology PKL.",
+        ),
+        xeno_canto_ids.build_parser().parse_args([]),
+        ["input", "output"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "fetch-xeno-canto-audio",
+            help="Download Xeno-canto audio files into per-QID raw directories.",
+        ),
+        xeno_canto_audio.build_parser().parse_args([]),
+        ["input", "output_dir", "since_date", "limit_per_qid", "max_pages", "sleep_seconds"],
     )
     add_arguments(
         subparsers.add_parser("build-graph", help="Build taxonomy graph PKL from ontology PKL."),
@@ -168,6 +184,12 @@ def main(argv: list[str] | None = None) -> int:
         "extract-qids": (qids.main, [], ["input", "output", "root_qid"]),
         "extract-dump-json": (dump_extract.main, [], ["input", "dump", "output_dir"]),
         "build-ontology": (ontology.main, [], ["json_dir", "output", "root_qid"]),
+        "extract-xeno-canto-ids": (xeno_canto_ids.main, [], ["input", "output"]),
+        "fetch-xeno-canto-audio": (
+            xeno_canto_audio.main,
+            [],
+            ["input", "output_dir", "since_date", "limit_per_qid", "max_pages", "sleep_seconds"],
+        ),
         "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
         "build-sqlite": (sqlite_store.main, [], ["input", "output", "root_qid"]),
         "build-embeddings": (

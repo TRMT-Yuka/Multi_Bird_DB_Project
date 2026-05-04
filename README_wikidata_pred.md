@@ -53,6 +53,8 @@ pip install qwikidata
   - `make extract-dump-json`
 - ontology PKL を作る
   - `make build-ontology`
+- Xeno-canto ID の一覧を作る
+  - `make extract-xeno-canto-ids`
 - 構文確認
   - `make verify`
 
@@ -114,7 +116,19 @@ make build-ontology
 
 `data/interim/wikidata/json/` が空だと失敗します。
 
-### 6. graph 側の処理
+### 6. Xeno-canto ID の一覧を作る
+
+```bash
+make extract-xeno-canto-ids
+```
+
+入力: `data/processed/bird_ontology.pkl`
+
+出力: `data/interim/wikidata/bird_xeno_canto_ids.tsv`
+
+`bird_ontology.pkl` から `xeno_canto_species_id` を持つ行だけを抜き出し、`qid` と `xeno_canto_species_id` の対応表を作ります。
+
+### 7. graph 側の処理
 
 taxonomy graph の構築、埋め込み、Dash viewer は [README_graph.md](README_graph.md) を参照してください。
 
@@ -123,11 +137,13 @@ taxonomy graph の構築、埋め込み、Dash viewer は [README_graph.md](READ
 - `data/interim/wikidata/bird_qids.tsv`
   - QID 一覧
 - `data/raw/wikidata/dumps/latest-all.json.bz2`
-  - Wikidata 全量 dump
+  - Wikidata 全 dump
 - `data/interim/wikidata/json/<1桁目>/<2桁目>/Qxxxx.json`
   - 各 QID の entity JSON
 - `data/processed/bird_ontology.pkl`
   - ontology 成果物
+- `data/interim/wikidata/bird_xeno_canto_ids.tsv`
+  - `qid` と `xeno_canto_species_id` の対応表
 
 ## 関連ファイル
 

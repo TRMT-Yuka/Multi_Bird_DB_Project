@@ -759,7 +759,7 @@ def build_parser() -> argparse.ArgumentParser:
     paths = get_project_paths()
     parser = argparse.ArgumentParser(description="Build graph embeddings from a taxonomy NetworkX graph PKL.")
     parser.add_argument("--input", default=str(paths.taxonomy_graph_pkl))
-    parser.add_argument("--output-dir", default=str(paths.graph_embeddings_dir / "taxonomy"))
+    parser.add_argument("--output-dir", default=str(paths.graph_embeddings_dir))
     parser.add_argument(
         "--algorithm",
         choices=["node2vec", "gcn", "grac", "transe", "hgcn", "both"],
