@@ -1,0 +1,593 @@
+目的:
+種族グラフに対して、以下5種類のグラフ埋め込み手法を同一条件で比較する実験コードを作成する。
+
+対象手法:
+1. Node2Vec
+2. GCN
+3. GRACE
+4. TransE
+5. GraphSAGE
+
+今回の重要条件:
+- 音声特徴は使わない。
+- テキスト特徴は使わない。
+- 初期ノード特徴にマルチモーダル情報を入れない。
+- 評価対象は「純粋にグラフ構造から得られる埋め込みの良し悪し」。
+- 最終タスクは、学習済みノード埋め込みに対するクラスタリング評価。
+- 真のノードラベルは、学習時には使わない。
+- 真のノードラベルは、クラスタリング結果の評価にのみ使う。
+- したがって、GCN/GraphSAGEも教師ありcross entropyではなく、教師なし・自己教師あり設定を基本にする。
+
+
+3. relation_type が存在する場合:
+   - TransEでは (head, relation, tail) の三つ組として使う。
+   - relation_type が存在しない場合は、TransE用に単一関係 "related_to" を付与してもよいが、その場合は結果解釈で「単一関係TransE」と明記する。
+
+4. グラフは無向・有向を設定で切り替えられるようにする。
+   - デフォルトは有向グラフ。
+   - TransEでは有向三つ組として扱う。
+
+実験全体の設計:
+各手法でノード埋め込み Z を学習する。
+その後、全手法に同じクラスタリング手法を適用する。
+
+クラスタリング:
+- k-means を基本とする。
+- クラスタ数 k は真のラベル数に合わせる。
+- 追加で GMM または spectral clustering をオプション実装してよい。
+- クラスタリング学習には真のラベルを使わない
+
+評価指標:
+クラスタリング評価:
+- NMI
+- ARI
+- Purity
+- Homogeneity
+- Completeness
+- V-measure
+- Silhouette score。ただしこれはラベル非依存指標として扱う。
+
+構造評価:
+- Link prediction AUC
+- Average Precision
+- MRR
+- Hits@1
+- Hits@5
+- Hits@10
+
+学習監視:
+各手法について、epochごとに以下を保存する。
+- train_loss
+- positive_score_mean
+- negative_score_mean
+- score_gap = positive_score_mean - negative_score_mean
+- embedding_norm_mean
+- embedding_norm_std
+- embedding_variance_mean
+- gradient_norm
+- learning_rate
+- validation_metric がある場合は validation_metric
+
+最終出力:
+実験終了後、以下を保存する。
+
+1. embeddings/
+   - node2vec_embeddings.npy
+   - gcn_embeddings.npy
+   - grace_embeddings.npy
+   - transe_entity_embeddings.npy
+   - graphsage_embeddings.npy
+
+2. logs/
+   - node2vec_train_log.csv
+   - gcn_train_log.csv
+   - grace_train_log.csv
+   - transe_train_log.csv
+   - graphsage_train_log.csv
+
+3. metrics/
+   - clustering_metrics.csv
+   - link_prediction_metrics.csv
+   - summary_metrics.csv
+
+4. plots/
+   - loss_curve_node2vec.png
+   - loss_curve_gcn.png
+   - loss_curve_grace.png
+   - loss_curve_transe.png
+   - loss_curve_graphsage.png
+   - positive_negative_score_node2vec.png
+   - positive_negative_score_grace.png
+   - positive_negative_distance_transe.png
+   - embedding_norms.png
+   - embedding_variance.png
+   - clustering_metrics_barplot.png
+   - tsne_embeddings_each_method.png
+   - umap_embeddings_each_method.png
+
+5. report/
+   - experiment_report.md
+   - experiment_report.json
+
+比較上の重要ルール:
+- loss値そのものを手法間で直接比較しない。
+- Node2Vec, TransE, GRACE, GraphSAGE, GCNではlossの意味が異なるため、比較は以下で行う。
+  - 各手法内でlossが安定して改善しているか
+  - 正例と負例のスコアが分離しているか
+  - 埋め込みがcollapseしていないか
+  - 共通のクラスタリング評価指標が高いか
+  - link prediction指標が高いか
+
+モデル別仕様:
+
+1. Node2Vec
+
+入力:
+- グラフ構造 A
+
+学習:
+- random walk を生成する。
+- window size に基づいて正例ペアを作る。
+- negative sampling により負例ノードを作る。
+- skip-gram negative sampling loss で学習する。
+
+loss:
+L_node2vec =
+- sum_{(u,v) in D+} log sigmoid(z_u^T z_v)
+- sum_{(u,n) in D-} log sigmoid(-z_u^T z_n)
+
+記録する指標:
+- train_loss
+- positive_score_mean = mean(z_u^T z_v)
+- negative_score_mean = mean(z_u^T z_n)
+- score_gap
+- embedding_norm_mean
+- embedding_variance_mean
+
+期待される良い学習状態:
+- train_loss が下がる。
+- positive_score_mean が上がる。
+- negative_score_mean が下がる。
+- score_gap が広がる。
+- embedding variance がゼロに潰れない。
+
+2. TransE
+
+入力:
+- relation_type 付き三つ組 (h, r, t)
+- relation_type がない場合は単一関係として扱う。
+
+学習:
+- 正例三つ組 (h, r, t) を使う。
+- head または tail をランダムに置換して負例三つ組を作る。
+- margin ranking loss で学習する。
+
+score:
+d_pos = || z_h + z_r - z_t ||
+d_neg = || z_h' + z_r - z_t' ||
+
+loss:
+L_transe =
+sum max(0, gamma + d_pos - d_neg)
+
+記録する指標:
+- train_loss
+- positive_distance_mean
+- negative_distance_mean
+- margin_gap = negative_distance_mean - positive_distance_mean
+- entity_embedding_norm_mean
+- relation_embedding_norm_mean
+- embedding_variance_mean
+
+期待される良い学習状態:
+- train_loss が下がる。
+- positive_distance_mean が下がる。
+- negative_distance_mean が相対的に上がる。
+- margin_gap が広がる。
+- entity embedding がcollapseしない。
+
+3. GCN
+
+条件:
+- 音声・テキスト特徴は使わない。
+- 初期特徴は以下を設定で選択できるようにする。
+  a. degree feature
+  b. one-hot identity feature
+  c. constant feature
+  d. fixed random feature
+
+推奨:
+- 構造のみ比較では degree feature を主設定にする。
+- one-hot identity feature は transductive 設定として別枠で報告する。
+
+学習:
+- 教師ありcross entropyは使わない。
+- GCN encoder を用いた graph autoencoder 形式を基本にする。
+- ノード埋め込み Z = GCN(X, A) を作る。
+- 内積 decoder で辺の存在を再構成する。
+
+decoder:
+p_ij = sigmoid(z_i^T z_j)
+
+loss:
+L_gcn_gae =
+- sum_{(i,j) in E} log sigmoid(z_i^T z_j)
+- sum_{(i,n) notin E} log sigmoid(-z_i^T z_n)
+
+記録する指標:
+- train_loss
+- positive_edge_score_mean
+- negative_edge_score_mean
+- score_gap
+- link_prediction_auc
+- link_prediction_ap
+- embedding_norm_mean
+- embedding_variance_mean
+
+期待される良い学習状態:
+- train_loss が下がる。
+- positive_edge_score_mean が上がる。
+- negative_edge_score_mean が下がる。
+- link prediction AUC/AP が上がる。
+- embedding variance が潰れない。
+
+4. GraphSAGE
+
+条件:
+- 音声・テキスト特徴は使わない。
+- 初期特徴は GCN と同じ方針。
+- inductive 性を確認する場合、one-hot identity は使わず、degree feature または structural feature を使う。
+
+学習:
+- 教師なしGraphSAGEとして実装する。
+- random walk または近傍文脈から正例ペアを作る。
+- negative samplingで負例を作る。
+- GraphSAGE encoder で h_i を作り、negative sampling loss を最小化する。
+
+loss:
+L_graphsage =
+- log sigmoid(h_u^T h_v)
+- Q * E_{n ~ Pn} log sigmoid(-h_u^T h_n)
+
+記録する指標:
+- train_loss
+- positive_score_mean
+- negative_score_mean
+- score_gap
+- embedding_norm_mean
+- embedding_variance_mean
+- sampling_batch_loss_std
+
+期待される良い学習状態:
+- train_loss が下がる。
+- positive_score_mean と negative_score_mean が分離する。
+- サンプリングによりlossが揺れても、移動平均では改善する。
+- embedding collapse が起きない。
+
+5. GRACE
+
+条件:
+- 音声・テキスト特徴は使わない。
+- 構造のみのGRACEとして設計する。
+- 初期特徴は GCN と同じ方針。
+- 主なaugmentationは edge dropout とする。
+- feature masking は、degree feature や random feature を使う場合のみ補助的に使う。
+- one-hot identity feature に対するfeature maskingは解釈に注意する。
+
+ビュー生成:
+- 元グラフ A から2つの構造摂動ビューを作る。
+- A1 = DropEdge(A, p1)
+- A2 = DropEdge(A, p2)
+- p1, p2 は異なる値にする。
+- 例: p1 = 0.2, p2 = 0.4
+- 過度に大きなedge dropoutは避ける。
+
+encoder:
+- GCN encoder または GraphSAGE encoder を選べるようにする。
+- デフォルトは GCN encoder。
+- 追加実験として GRACE-GraphSAGE も実装可能にする。
+
+埋め込み:
+U = f(X, A1)
+V = f(X, A2)
+
+projection head:
+- 2層MLP
+- z = g(h)
+- cosine similarity を使う。
+
+正例:
+- 同じノードの2ビュー表現 (u_i, v_i)
+
+負例:
+- inter-view negative: (u_i, v_k), k != i
+- intra-view negative: (u_i, u_k), k != i
+
+GRACE loss:
+ell(u_i, v_i) =
+log [
+ exp(theta(u_i, v_i) / tau)
+ /
+ {
+ exp(theta(u_i, v_i) / tau)
+ + sum_{k != i} [
+   exp(theta(u_i, v_k) / tau)
+   + exp(theta(u_i, u_k) / tau)
+ ]
+ }
+]
+
+L_GRACE =
+- 1/(2N) * sum_i [ ell(u_i, v_i) + ell(v_i, u_i) ]
+
+記録する指標:
+- train_loss
+- positive_similarity_mean = mean cos(g(u_i), g(v_i))
+- negative_inter_similarity_mean = mean cos(g(u_i), g(v_k))
+- negative_intra_similarity_mean = mean cos(g(u_i), g(u_k))
+- positive_negative_gap
+- embedding_norm_mean
+- embedding_variance_mean
+- alignment
+- uniformity
+
+alignment:
+alignment = mean || normalize(u_i) - normalize(v_i) ||^2
+
+uniformity:
+uniformity = log mean exp(-2 * || normalize(z_i) - normalize(z_j) ||^2)
+
+期待される良い学習状態:
+- train_loss が下がる。
+- positive_similarity_mean が上がる。
+- negative similarities が相対的に低い。
+- positive_negative_gap が広がる。
+- alignment が改善する。
+- uniformity が極端に悪化しない。
+- embedding variance がゼロに近づかない。
+- 全ノードが同じベクトルになるcollapseを避ける。
+
+共通のクラスタリング評価手順:
+各モデルで学習したノード埋め込み Z に対して、同一条件でクラスタリングを行う。
+
+手順:
+1. Z を取得する。
+2. 必要なら L2 normalize する。
+3. k = number_of_unique_labels とする。
+4. k-means を n_init=20 以上で実行する。
+5. 得られた cluster_id と true label を比較する。
+6. NMI, ARI, Purity, Homogeneity, Completeness, V-measure を計算する。
+7. label はここでのみ使う。
+
+注意:
+- k-means の初期値依存を避けるため、複数seedで平均と標準偏差を出す。
+- 埋め込み学習も複数seedで実行する。
+- 最終結果は mean ± std で報告する。
+
+共通のlink prediction評価:
+構造表現の品質を見るため、可能ならlink predictionも実施する。
+
+手順:
+1. edges を train/valid/test に分割する。
+2. train graph だけで各モデルを学習する。
+3. test positive edges と同数の negative edges を作る。
+4. 各手法のスコア関数でリンクスコアを計算する。
+5. AUC, AP, MRR, Hits@K を計算する。
+
+スコア関数:
+- Node2Vec: z_i^T z_j
+- GCN-GAE: z_i^T z_j
+- GraphSAGE: h_i^T h_j
+- GRACE: h_i^T h_j または cosine similarity
+- TransE: - || z_h + z_r - z_t ||
+
+可視化:
+以下のplotを必ず作成する。
+
+1. 各手法のloss curve
+   - x-axis: epoch
+   - y-axis: train loss
+   - 注意: loss値を手法間で直接比較しない。各手法内の推移を見る。
+
+2. 正例・負例スコアの推移
+   - Node2Vec: positive_score_mean, negative_score_mean
+   - GraphSAGE: positive_score_mean, negative_score_mean
+   - GCN-GAE: positive_edge_score_mean, negative_edge_score_mean
+   - GRACE: positive_similarity_mean, negative similarity
+   - TransE: positive_distance_mean, negative_distance_mean
+
+3. score_gap / margin_gap の推移
+
+4. embedding norm の推移
+
+5. embedding variance の推移
+
+6. クラスタリング評価の棒グラフ
+   - NMI
+   - ARI
+   - Purity
+   - Homogeneity
+   - Completeness
+   - V-measure
+
+7. t-SNE / UMAP
+   - 各手法の埋め込みを2次元可視化
+   - 点の色は true label
+   - 注意: true label は可視化・評価のみに使う。
+
+学習の良し悪し判定ロジック:
+各手法について、以下の自動診断を実装する。
+
+診断項目:
+1. loss_decreased:
+   - 初期数epoch平均loss > 最終数epoch平均loss なら true
+
+2. score_separated:
+   - positive_score と negative_score の差が学習後に広がっていれば true
+   - TransEでは negative_distance - positive_distance が広がっていれば true
+
+3. no_embedding_collapse:
+   - embedding_variance_mean が閾値より大きい
+   - embedding_norm_std が極端に小さすぎない
+
+4. clustering_useful:
+   - NMI, ARI, Purity が random baseline より高い
+
+5. link_prediction_useful:
+   - AUC > 0.5
+   - AP が random baseline より高い
+
+summary report では、各手法について以下のように判定する。
+
+- optimization_status:
+  good / unstable / failed
+
+- representation_status:
+  good / collapsed / weakly_separated
+
+- clustering_status:
+  good / moderate / poor
+
+- overall_status:
+  good / moderate / poor
+
+実験の公平性:
+- すべてのモデルで embedding_dim を揃える。
+- すべてのモデルで学習seedを揃える。
+- 可能なら training budget を揃える。
+- epoch数だけでなく、計算時間も記録する。
+- Node2Vecのwalk数やwindow size、GraphSAGEのsampling数、GRACEのdropedge率、TransEのnegative数はconfigで管理する。
+- 最終比較は複数seedの平均と標準偏差で報告する。
+
+推奨config例:
+
+embedding_dim: 128
+num_epochs: 200
+num_seeds: 5
+learning_rate: 0.001
+weight_decay: 1e-5
+
+node2vec:
+  walk_length: 40
+  num_walks: 10
+  window_size: 10
+  p: 1.0
+  q: 1.0
+  negative_samples: 5
+
+transe:
+  margin: 1.0
+  p_norm: 1
+  negative_samples: 10
+
+gcn:
+  hidden_dim: 128
+  num_layers: 2
+  initial_features: degree
+  loss: gae_negative_sampling
+
+graphsage:
+  hidden_dim: 128
+  num_layers: 2
+  aggregator: mean
+  num_neighbors: [25, 10]
+  loss: unsupervised_negative_sampling
+  initial_features: degree
+
+grace:
+  encoder: gcn
+  hidden_dim: 128
+  projection_dim: 128
+  tau: 0.5
+  edge_drop_1: 0.2
+  edge_drop_2: 0.4
+  feature_mask_1: 0.0
+  feature_mask_2: 0.0
+  initial_features: degree
+
+実装方針:
+- Pythonで実装する。
+- PyTorch Geometric または DGL を使ってよい。
+- 可能ならPyTorch Geometricを優先する。
+- 実験設定は YAML で管理する。
+- 乱数seedを固定する。
+- CPU/GPUの両方で動作可能にする。
+- すべての結果を再現可能にする。
+
+コード構成:
+project/
+  configs/
+    default.yaml
+  data/
+    nodes.csv
+    edges.csv
+  src/
+    data_loader.py
+    features.py
+    models/
+      node2vec_model.py
+      transe_model.py
+      gcn_gae_model.py
+      graphsage_unsup_model.py
+      grace_model.py
+    losses.py
+    train.py
+    evaluate_clustering.py
+    evaluate_link_prediction.py
+    plot_results.py
+    diagnostics.py
+    utils.py
+  outputs/
+    embeddings/
+    logs/
+    metrics/
+    plots/
+    report/
+
+最終レポートに必ず含める内容:
+1. 実験条件
+   - ノード数
+   - エッジ数
+   - 関係タイプ数
+   - ラベル数
+   - 使用した初期特徴
+   - 使用しなかった情報: audio/text
+
+2. 各手法の学習設定
+   - embedding_dim
+   - loss
+   - negative sampling数
+   - epoch数
+   - learning rate
+
+3. 学習曲線の解釈
+   - lossは下がったか
+   - 正例・負例は分離したか
+   - collapseは起きていないか
+
+4. クラスタリング結果
+   - NMI
+   - ARI
+   - Purity
+   - Homogeneity
+   - Completeness
+   - V-measure
+
+5. link prediction結果
+   - AUC
+   - AP
+   - MRR
+   - Hits@K
+
+6. 総合判断
+   - どの手法が構造のみで最も良い埋め込みを作ったか
+   - その判断根拠
+   - lossの改善とクラスタリング性能が一致したか
+   - 一致しない場合の考察
+
+重要な解釈ルール:
+- lossが下がっただけで、良い埋め込みとは判断しない。
+- 最終判断はクラスタリング評価とlink prediction評価を重視する。
+- 真のラベルは学習時に使わない。
+- クラスタリングは学習時タスクではなく、評価時タスクとして扱う。
+- ただし、将来的な拡張としてクラスタリングlossを追加する場合は、標準比較とは別枠の提案モデルとして扱う

@@ -62,12 +62,11 @@
 
 ## 実行
 
-この節は 2 段に分かれています。
-
-- 上段
-  - 目的ごとに使うコマンドをすぐ確認するための早見表です
-- 下段
-  - 番号付きの詳細手順です。実際に上から順に実行する場合はこちらを見ます
+この節は、graph の構築、埋め込み、評価を最小限の手順で回すための実験仕様です。  
+graph 埋め込みは **Node2Vec / GCN / GRACE / GraphSAGE / TransE** の 5 手法を同一条件で比較します。  
+音声特徴、テキスト特徴、マルチモーダル初期特徴は使わず、**graph 構造だけ**を入力にします。  
+`TransE` の relation は `parent_taxon` です。`graph` の向きは設定で切り替えられますが、既定は **有向** です。  
+真のラベルは学習には使わず、**クラスタリング評価と report 出力のみに使います**。
 
 ### 実行コマンドの早見表
 
@@ -76,75 +75,80 @@
 - graph 埋め込みを個別に作りたい場合
   - `make build-node2vec-embeddings`
   - `make build-gcn-embeddings`
-  - `make build-grac-embeddings`
+  - `make build-grace-embeddings`
+  - `make build-graphsage-embeddings`
   - `make build-transe-embeddings`
 - まとめて設定を変えたい場合
-  - `make build-embeddings EMBEDDING_ALGORITHM=<node2vec|gcn|grac|transe>`
+  - `make build-embeddings EMBEDDING_ALGORITHM=<node2vec|gcn|grace|transe|graphsage>`
 - taxonomy graph をインタラクティブに観察したい場合
   - `make serve-graph`
+- graph 埋め込みのクラスタリング評価とレポートを作りたい場合
+  - `make evaluate-graph-embeddings`
 - コードの構文確認だけしたい場合
   - `make verify`
 
 ### 詳細手順
 
-### 0. 作業ディレクトリへ移動する
+#### 0. 作業ディレクトリへ移動する
 
 ```bash
 cd Multi_Bird_DB_Project
 ```
 
-### 1. ontology PKL があることを確認する
+#### 1. ontology PKL を作る
 
-入力は `data/processed/bird_ontology.pkl` です。
+`make build-graph` の前提は `data/processed/bird_ontology.pkl` です。未生成なら先に [README_wikidata_pred.md](README_wikidata_pred.md) の手順で ontology を作成してください。
 
-このファイルは graph 単体では作られません。前段の `Wikidata 側` の処理で生成される ontology 成果物です。未生成の場合は、先に [README_wikidata_pred.md](README_wikidata_pred.md) の手順に従って `make build-ontology` まで実行してください。
-
-### 2. taxonomy graph PKL を作る
+#### 2. taxonomy graph PKL を作る
 
 ```bash
 make build-graph
 ```
 
-前提ファイル:
-- `data/processed/bird_ontology.pkl`
+入力: `data/processed/bird_ontology.pkl`  
+出力: `data/processed/graph/bird_taxonomy_graph.pkl`
 
-`bird_ontology.pkl` がまだない場合は、先に [README_wikidata_pred.md](README_wikidata_pred.md) の `make build-ontology` を実行してください。
-
-実行される処理:
-- [src/multi_bird_db/cli.py](src/multi_bird_db/cli.py)
-- [src/multi_bird_db/graph.py](src/multi_bird_db/graph.py)
-
-生成物:
-- `data/processed/graph/bird_taxonomy_graph.pkl`
-
-このコマンドは `bird_ontology.pkl` を読み、`parent_taxon -> qid` の有向エッジを持つ graph を構築して保存します。
-
-### 3. graph 埋め込みを作る
+#### 3. graph 埋め込みを作る
 
 ```bash
 make build-embeddings
 ```
 
-前提ファイル:
-- `data/processed/graph/bird_taxonomy_graph.pkl`
+入力: `data/processed/graph/bird_taxonomy_graph.pkl`  
+出力:
+- `data/external/embeddings/graph/node2vec/<MMDDhhmm>/`
+- `data/external/embeddings/graph/gcn/<MMDDhhmm>/`
+- `data/external/embeddings/graph/grace/<MMDDhhmm>/`
+- `data/external/embeddings/graph/graphsage/<MMDDhhmm>/`
+- `data/external/embeddings/graph/transe/<MMDDhhmm>/`
 
-`bird_taxonomy_graph.pkl` がまだない場合は、先にこの README の `make build-graph` を実行してください。
+このリポジトリでは、`node2vec`、`gcn`、`grace`、`graphsage`、`transe` を同一 graph から学習します。`grace` は公式 GRACE に沿った contrastive learning、`gcn` は自己教師あり graph autoencoder、`graphsage` は mean-aggregator + neighbor sampling による自己教師あり negative sampling、`transe` は relation=`parent_taxon` の knowledge graph embedding です。`gcn` は encoder + inner-product decoder です。`grace` では `gcn` を encoder として使います。`grace` は既定で CPU 実行です。CUDA を使う場合は `--device cuda` を明示してください。
 
-実行される処理:
-- [src/multi_bird_db/cli.py](src/multi_bird_db/cli.py)
-- [src/multi_bird_db/embeddings.py](src/multi_bird_db/embeddings.py)
+学習ログは各手法の `metadata.json` の `training_trace` に入ります。各実行は `data/external/embeddings/graph/<method>/<MMDDhhmm>/` に保存されます。
 
-生成物:
-- `data/external/embeddings/graph/node2vec/`
-- `data/external/embeddings/graph/gcn/`
-- `data/external/embeddings/graph/grac/`
-- `data/external/embeddings/graph/transe/`
-- `data/external/embeddings/graph/hgcn/`
+#### 実験パラメタ
 
-このコマンドは graph PKL を入力にして、`qid` をキーに参照できる埋め込みを保存します。`node2vec` は walk ベース、`gcn` は平滑化ベース、`grac` は attention 付き平滑化、`transe` は知識グラフ埋め込みとして学習します。
+以下は現在の最終既定値です。`make build-*-embeddings` はこの値をベースに動きます。
 
-`node2vec` の公式実装の既定値は概ね `dimensions=128`、`walk_length=80`、`num_walks=10`、`p=1`、`q=1`、`workers=1` です。  
-このリポジトリの `node2vec` は自前実装で、今の既定値は `dim=64`、`walk_length=20`、`num_walks=10`、`window_size=5`、`negative_samples=5`、`epochs=2` になっています。重く感じる場合は `walk_length`、`num_walks`、`negative_samples`、`epochs` をまず下げるのが効果的です。
+- `node2vec`
+  - 既定値: `dim=128`, `walk_length=40`, `num_walks=10`, `window_size=10`, `negative_samples=5`, `epochs=200`, `learning_rate=0.001`, `p=1.0`, `q=1.0`, `seed=42`, `undirected=False`
+- `gcn`
+  - 既定値: `dim=128`, `layers=1`, `residual=0.0`, `epochs=300`, `learning_rate=0.01`, `negative_samples=20`, `feature_mode=degree`, `weight_decay=0.0`, `seed=42`, `root_qid=None`, `undirected=False`
+- `grace`
+  - 既定値: `dim=128`, `proj_dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `tau=0.5`, `drop_edge_rate_1=0.2`, `drop_edge_rate_2=0.4`, `drop_feature_rate_1=0.0`, `drop_feature_rate_2=0.0`, `batch_size=256`, `encoder_type=gcn`, `feature_mode=degree`, `weight_decay=1e-5`, `device=cpu`, `seed=42`, `root_qid=None`, `undirected=False`
+- `graphsage`
+  - 既定値: `dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `negative_samples=5`, `num_neighbors=[25,10]`, `feature_mode=degree`, `seed=42`, `root_qid=None`, `undirected=False`
+- `transe`
+  - 既定値: `dim=128`, `epochs=200`, `learning_rate=0.001`, `margin=1.0`, `negative_samples=10`, `p_norm=1`, `weight_decay=1e-5`, `seed=42`, `root_qid=None`
+  - `p_norm=1` なので L1 距離版として扱う
+
+#### 公式リンク
+
+- `node2vec`: [論文](https://arxiv.org/abs/1607.00653), [実装](https://github.com/eliorc/node2vec)
+- `gcn`: [論文](https://arxiv.org/abs/1609.02907), [実装](https://github.com/tkipf/gcn)
+- `grace`: [論文](https://arxiv.org/abs/2006.04131), [実装](https://github.com/CRIPAC-DIG/GRACE)
+- `graphsage`: [論文](https://arxiv.org/abs/1706.02216), [実装](https://github.com/williamleif/GraphSAGE)
+- `transe`: [論文](https://papers.nips.cc/paper_files/paper/2013/hash/1cecc7a77928ca8133fa24680a88d2f9-Abstract.html)
 
 ### 4. taxonomy graph を Dash Cytoscape で観察する
 
@@ -171,6 +175,29 @@ viewer の特徴:
 - ノードをクリックすると右側のパネルに QID、rank、学名、URL を表示する
 
 5 万件規模を一度にブラウザへ出すのは重いため、viewer は常に部分グラフだけを表示します。デフォルトでは `Q5113` を根にして深さ 2、最大 150 ノードまでを描画します。
+
+### 5. graph 埋め込みをクラスタリング評価する
+
+```bash
+make evaluate-graph-embeddings
+```
+
+前提:
+- `data/processed/graph/bird_taxonomy_graph.pkl`
+- `data/external/embeddings/graph/<method>/<MMDDhhmm>/embeddings.npy`
+
+評価:
+- `k-means` の `k` は真のラベル数に合わせる
+- 真のラベルは既定で `taxon_rank_name`
+- 指標は `NMI`, `ARI`, `Purity`, `Homogeneity`, `Completeness`, `V-measure`, `Silhouette`
+
+生成物:
+- `data/external/embeddings/graph/evaluation/metrics/clustering_metrics.csv`
+- `data/external/embeddings/graph/evaluation/metrics/summary_metrics.csv`
+- `data/external/embeddings/graph/evaluation/plots/clustering_metrics_barplot.png`
+- `data/external/embeddings/graph/evaluation/logs/<method>_cluster_assignments.tsv`
+- `data/external/embeddings/graph/evaluation/report/experiment_report.md`
+- `data/external/embeddings/graph/evaluation/report/experiment_report.json`
 
 ## graph PKL の構造
 

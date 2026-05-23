@@ -4,7 +4,7 @@ import argparse
 import json
 from collections.abc import Callable
 
-from . import dump_extract, embeddings, graph, graph_dash, language_embeddings, ontology, qids, sqlite_store, wikipedia_articles, xeno_canto_audio, xeno_canto_ids
+from . import dump_extract, embeddings, graph, graph_dash, graph_evaluation, language_embeddings, ontology, qids, sqlite_store, wikipedia_articles, xeno_canto_audio, xeno_canto_ids
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
@@ -105,11 +105,14 @@ def build_parser() -> argparse.ArgumentParser:
             "output_dir",
             "algorithm",
             "dim",
+            "proj_dim",
             "seed",
+            "initial_features",
             "walk_length",
             "num_walks",
             "window_size",
             "negative_samples",
+            "transe_negative_samples",
             "epochs",
             "learning_rate",
             "p",
@@ -117,7 +120,18 @@ def build_parser() -> argparse.ArgumentParser:
             "undirected",
             "layers",
             "residual",
-            "curvature",
+            "tau",
+            "drop_edge_rate_1",
+            "drop_edge_rate_2",
+            "drop_feature_rate_1",
+            "drop_feature_rate_2",
+            "batch_size",
+            "grace_encoder",
+            "device",
+            "weight_decay",
+            "p_norm",
+            "graphsage_num_neighbors_1",
+            "graphsage_num_neighbors_2",
             "root_qid",
         ],
     )
@@ -148,6 +162,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         graph_dash.build_parser().parse_args([]),
         ["input", "root_qid", "max_depth", "max_nodes", "host", "port", "debug"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "evaluate-graph-embeddings",
+            help="Evaluate graph embeddings with clustering metrics and write a report.",
+        ),
+        graph_evaluation.build_parser().parse_args([]),
+        ["graph_input", "embeddings_root", "output_root", "label_field", "methods", "seed", "silhouette_sample_size"],
     )
     add_arguments(
         subparsers.add_parser(
@@ -200,11 +222,14 @@ def main(argv: list[str] | None = None) -> int:
                 "output_dir",
                 "algorithm",
                 "dim",
+                "proj_dim",
                 "seed",
+                "initial_features",
                 "walk_length",
                 "num_walks",
                 "window_size",
                 "negative_samples",
+                "transe_negative_samples",
                 "epochs",
                 "learning_rate",
                 "p",
@@ -212,7 +237,18 @@ def main(argv: list[str] | None = None) -> int:
                 "undirected",
                 "layers",
                 "residual",
-                "curvature",
+                "tau",
+                "drop_edge_rate_1",
+                "drop_edge_rate_2",
+                "drop_feature_rate_1",
+                "drop_feature_rate_2",
+                "batch_size",
+                "grace_encoder",
+                "device",
+                "weight_decay",
+                "p_norm",
+                "graphsage_num_neighbors_1",
+                "graphsage_num_neighbors_2",
                 "root_qid",
             ],
         ),
@@ -231,6 +267,11 @@ def main(argv: list[str] | None = None) -> int:
             graph_dash.main,
             [],
             ["input", "root_qid", "max_depth", "max_nodes", "host", "port", "debug"],
+        ),
+        "evaluate-graph-embeddings": (
+            graph_evaluation.main,
+            [],
+            ["graph_input", "embeddings_root", "output_root", "label_field", "methods", "seed", "silhouette_sample_size"],
         ),
         "build-wikipedia-manifest": (
             wikipedia_articles.main,

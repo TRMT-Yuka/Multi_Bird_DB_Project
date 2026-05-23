@@ -56,16 +56,18 @@ data/                                     # このプロジェクトで扱う全
   - Dash Cytoscape viewer 用の graph モダリティ作業領域です
 - `processed/wikipedia_article_manifest.tsv`
   - Wikipedia XML とテキストの保存先を管理する一覧です
-- `external/embeddings/graph/node2vec/`
+- `external/embeddings/graph/node2vec/<MMDDhhmm>/`
   - graph の node2vec 埋め込みです
-- `external/embeddings/graph/gcn/`
+- `external/embeddings/graph/gcn/<MMDDhhmm>/`
   - graph の GCN 埋め込みです
-- `external/embeddings/graph/grac/`
-  - graph の GRAC 埋め込みです
-- `external/embeddings/graph/transe/`
+- `external/embeddings/graph/grace/<MMDDhhmm>/`
+  - graph の GRACE 埋め込みです
+- `external/embeddings/graph/graphsage/<MMDDhhmm>/`
+  - graph の GraphSAGE 埋め込みです
+- `external/embeddings/graph/transe/<MMDDhhmm>/`
   - graph の TransE 埋め込みです
-- `external/embeddings/graph/hgcn/`
-  - graph の HGCN 風ハイパボリック埋め込みです
+- `external/embeddings/graph/evaluation/`
+  - graph 埋め込みのクラスタリング評価結果・レポートです
 - `external/sqlite/taxonomy/bird_taxonomy.sqlite`
   - taxonomy graph と ontology を引くための軽量 SQLite DB です
 
