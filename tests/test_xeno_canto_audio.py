@@ -1,120 +1,125 @@
 from __future__ import annotations
 
-import pickle
+import csv
+import json
+import os
 import tempfile
 import unittest
-from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
-from multi_bird_db.xeno_canto_audio import (
-    extract_recording_ids,
-    fetch_qid_audio,
-    fetch_xeno_canto_audio,
-    parse_recording_page,
-)
+from multi_bird_db import xeno_canto_audio
 
 
-class XenoCantoAudioTests(unittest.TestCase):
-    def test_extract_recording_ids_preserves_order_and_deduplicates(self) -> None:
-        html = """
-        <table>
-          <tr><td>XC123456</td></tr>
-          <tr><td>XC123456</td></tr>
-          <tr><td>XC654321</td></tr>
-        </table>
-        """
-        self.assertEqual(extract_recording_ids(html), ["XC123456", "XC654321"])
-
-    def test_parse_recording_page_reads_uploaded_and_file_type(self) -> None:
-        html = """
-        <table>
-          <tr><td>Uploaded  |  2025-06-07</td></tr>
-          <tr><td>File type  |  wav</td></tr>
-        </table>
-        """
-        self.assertEqual(parse_recording_page(html), {"uploaded": "2025-06-07", "file_type": "wav"})
-
-    def test_fetch_qid_audio_filters_by_upload_date(self) -> None:
-        species_html = "<div>XC1001 XC1002 XC1003</div>"
-        recording_pages = {
-            "https://xeno-canto.org/species/species-id?order=rec&pg=1": species_html,
-            "https://xeno-canto.org/1001": "<table><tr><td>Uploaded | 2025-05-02</td></tr><tr><td>File type | mp3</td></tr></table>",
-            "https://xeno-canto.org/1002": "<table><tr><td>Uploaded | 2025-04-30</td></tr><tr><td>File type | mp3</td></tr></table>",
-            "https://xeno-canto.org/1003": "<table><tr><td>Uploaded | 2025-06-01</td></tr><tr><td>File type | wav</td></tr></table>",
-        }
-        downloaded: list[str] = []
-
-        def fetch_text(url: str) -> str:
-            return recording_pages[url]
-
-        def download_bytes(url: str) -> bytes:
-            downloaded.append(url)
-            return f"payload:{url}".encode("utf-8")
-
+class XenoCantoApiWorkflowTests(unittest.TestCase):
+    def test_load_api_key_from_env_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            rows, status = fetch_qid_audio(
-                qid="Q1",
-                xeno_canto_species_id="species-id",
-                output_dir=Path(tmpdir),
-                since_date=date(2025, 5, 1),
-                limit_per_qid=10,
-                max_pages=1,
-                sleep_seconds=0.0,
-                fetch_text_fn=fetch_text,
-                download_bytes_fn=download_bytes,
+            root = Path(tmpdir)
+            env_file = root / "xeno_canto_api_key.env"
+            env_file.write_text("export XENO_CANTO_API_KEY=secret-key\n", encoding="utf-8")
+            fake_paths = type("P", (), {"root": root})
+            with patch.dict(os.environ, {}, clear=True), patch.object(xeno_canto_audio, "get_project_paths", return_value=fake_paths):
+                self.assertEqual(xeno_canto_audio.load_xeno_canto_api_key(None), "secret-key")
+
+    def test_api_query_and_url(self) -> None:
+        query = xeno_canto_audio.api_query_for_species_id("Corvus-macrorhynchos")
+        self.assertEqual(query, 'sp:"Corvus macrorhynchos" q:A')
+        url = xeno_canto_audio.api_recordings_url("Corvus-macrorhynchos", api_key="demo", page=2, per_page=50)
+        self.assertIn("https://xeno-canto.org/api/3/recordings?", url)
+        self.assertIn("query=sp%3A%22Corvus%20macrorhynchos%22%20q%3AA", url)
+        self.assertIn("page=2", url)
+        self.assertIn("per_page=50", url)
+        self.assertIn("key=demo", url)
+
+    def test_api_fetch_recordings_and_recording_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_tsv = root / "bird_xeno_canto_ids.tsv"
+            with input_tsv.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, delimiter="\t", fieldnames=["qid", "xeno_canto_species_id"])
+                writer.writeheader()
+                writer.writerow({"qid": "Q111674", "xeno_canto_species_id": "Corvus-macrorhynchos"})
+
+            api_output_dir = root / "api_recordings"
+            page_1_url = xeno_canto_audio.api_recordings_url("Corvus-macrorhynchos", api_key="demo", page=1, per_page=100)
+            page_2_url = xeno_canto_audio.api_recordings_url("Corvus-macrorhynchos", api_key="demo", page=2, per_page=100)
+            payloads = {
+                page_1_url: {
+                    "numPages": 2,
+                    "recordings": [
+                        {"id": "111", "file": "https://xeno-canto.org/111/download", "uploaded": "2025-05-02"}
+                    ],
+                },
+                page_2_url: {
+                    "numPages": 2,
+                    "recordings": [
+                        {"id": "112", "file": "https://xeno-canto.org/112/download", "uploaded": "2025-05-03"}
+                    ],
+                },
+            }
+
+            result = xeno_canto_audio.fetch_xeno_canto_recording_jsons(
+                input_path=input_tsv,
+                output_dir=api_output_dir,
+                api_key="demo",
+                per_page=100,
+                max_pages=5,
+                sleep_seconds=0,
+                fetch_json_fn=lambda url: payloads[url],
             )
 
-            self.assertEqual(status["status"], "ok")
-            self.assertEqual(len(rows), 2)
-            self.assertEqual([row["recording_id"] for row in rows], ["XC1001", "XC1003"])
-            self.assertEqual(downloaded, ["https://xeno-canto.org/1001/download", "https://xeno-canto.org/1003/download"])
-            self.assertTrue((Path(tmpdir) / "Q1" / "XC1001.mp3").exists())
-            self.assertTrue((Path(tmpdir) / "Q1" / "XC1003.wav").exists())
+            manifest_path = api_output_dir / "api_recordings_manifest.json"
+            summary_path = api_output_dir / "api_recordings_summary.json"
+            self.assertTrue(manifest_path.exists())
+            self.assertTrue(summary_path.exists())
+            self.assertEqual(result["summary"]["target_qid_count"], 1)
 
-    def test_fetch_xeno_canto_audio_writes_root_manifests(self) -> None:
-        ontology_rows = [{"qid": "Q1", "xeno_canto_species_id": "species-id"}]
-        species_html = "<div>XC1001</div>"
-        recording_pages = {
-            "https://xeno-canto.org/species/species-id?order=rec&pg=1": species_html,
-            "https://xeno-canto.org/1001": "<table><tr><td>Uploaded | 2025-05-02</td></tr><tr><td>File type | mp3</td></tr></table>",
-        }
+            page_1_path = api_output_dir / "Q111674" / "page001.json"
+            page_2_path = api_output_dir / "Q111674" / "page002.json"
+            self.assertTrue(page_1_path.exists())
+            self.assertTrue(page_2_path.exists())
 
-        def fetch_text(url: str) -> str:
-            return recording_pages[url]
+            recording_map_json = root / "recording_map.json"
+            map_result = xeno_canto_audio.build_xeno_canto_recording_map_from_api(
+                manifest_path=manifest_path,
+                output_json=recording_map_json,
+            )
+            self.assertTrue(recording_map_json.exists())
+            self.assertEqual(map_result["summary"]["recording_count"], 2)
 
-        def download_bytes(_: str) -> bytes:
-            return b"audio"
+            recording_map = json.loads(recording_map_json.read_text(encoding="utf-8"))
+            self.assertEqual(recording_map[0]["recording_ids"], ["111", "112"])
+            self.assertEqual(
+                recording_map[0]["download_urls"],
+                ["https://xeno-canto.org/111/download", "https://xeno-canto.org/112/download"],
+            )
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with tempfile.NamedTemporaryFile("wb", delete=False) as handle:
-                try:
-                    pickle.dump(ontology_rows, handle)
-                    handle.flush()
-                    ontology_path = Path(handle.name)
-                finally:
-                    handle.close()
-            try:
-                output_dir = Path(tmpdir)
-                result = fetch_xeno_canto_audio(
-                    ontology_path=ontology_path,
-                    output_dir=output_dir,
-                    since_date=date(2025, 5, 1),
-                    limit_per_qid=10,
-                    max_pages=1,
-                    sleep_seconds=0.0,
-                    fetch_text_fn=fetch_text,
-                    download_bytes_fn=download_bytes,
-                )
+            audio_output_dir = root / "audio"
+            downloaded_urls: list[str] = []
 
-                self.assertEqual(result["summary"]["recording_count"], 1)
-                self.assertTrue((output_dir / "audio_manifest.tsv").exists())
-                self.assertTrue((output_dir / "audio_ids.json").exists())
-                self.assertTrue((output_dir / "qids.json").exists())
-                self.assertTrue((output_dir / "metadata.json").exists())
-                self.assertTrue((output_dir / "summary.json").exists())
-                self.assertTrue((output_dir / "Q1" / "XC1001.mp3").exists())
-            finally:
-                ontology_path.unlink(missing_ok=True)
+            def fake_download_bytes(url: str) -> bytes:
+                downloaded_urls.append(url)
+                return f"payload:{url}".encode("utf-8")
+
+            def fake_clip_audio(tmp_input: Path, local_path: Path, file_type: str, clip_seconds: int) -> None:
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                local_path.write_bytes(f"{file_type}:{clip_seconds}:{tmp_input.read_text(encoding='utf-8')}".encode("utf-8"))
+
+            audio_result = xeno_canto_audio.fetch_audio_from_recording_map(
+                input_path=recording_map_json,
+                output_dir=audio_output_dir,
+                limit_per_qid=10,
+                clip_seconds=30,
+                sleep_seconds=0,
+                download_bytes_fn=fake_download_bytes,
+                clip_audio_fn=fake_clip_audio,
+            )
+
+            self.assertEqual(downloaded_urls, ["https://xeno-canto.org/111/download", "https://xeno-canto.org/112/download"])
+            self.assertTrue((audio_output_dir / "Q111674" / "111.mp3").exists())
+            self.assertTrue((audio_output_dir / "Q111674" / "112.mp3").exists())
+            self.assertEqual(audio_result["downloaded_qid_count"], 1)
+            self.assertEqual(audio_result["status_rows"][0]["selected_count"], 2)
 
 
 if __name__ == "__main__":

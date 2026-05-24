@@ -1,261 +1,136 @@
 # README_audio
 
-`audio 側` の README です。ここでは、鳥類音声データを `qid` と結びつけて保存し、後段の特徴量抽出や音声埋め込みへつなぐための整理をします。
+`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。
 
 ## 概要
 
-- `audio 側` の設計をまとめる
-- 入力は音声ファイル本体と、そのメタデータです
-- `qid` 1 件に対して複数の音声クリップを持てる前提にする
-- 音声クリップ単位の ID と `qid` を分離する
-- 将来的に特徴量抽出、音声埋め込み、分類モデル学習へつなぐ
-- 保存形式は row-aligned な manifest と埋め込み行列の組み合わせを基本にする
-- 埋め込み backend は `wav2vec`、`perch`、`birdnet` の 3 系列を前提にする
-- Xeno-canto の生音声は `data/raw/xeno-canto/after_202505/<qid>/` に置く
+- 入力は音声ファイル本体とメタデータです
+- `qid` ごとに複数クリップを持てます
+- 取得元は `data/interim/wikidata/bird_xeno_canto_ids.tsv` です
+- Xeno-canto は `recording_map.json` を作ってから音声取得します
+- Xeno-canto は品質 `A` のみを取得します
+- 音声は `data/raw/xeno-canto/<qid>/` に保存します
+- 1 `xeno_canto_species_id` につき最大 30 件まで取得します
+- API キーは `xeno_canto_api_key.env.example` を `xeno_canto_api_key.env` に複製して使います
 
-## 最初に読む場所
+## Backend 契約
 
-- [README.md](README.md)
-  - プロジェクト全体の入口です
-- [README_wikidata_pred.md](README_wikidata_pred.md)
-  - `Wikidata 側` で ontology PKL を作る手順です
-- [README_graph.md](README_graph.md)
-  - `qid` をキーにした保存形式の参考になります
-- [README_language.md](README_language.md)
-  - `qid` と surface ID の分離の考え方が参考になります
-- [data/README.md](data/README.md)
-  - データ配置ルールです
-- [docs/architecture.md](docs/architecture.md)
-  - 全体の拡張方針です
+音声埋め込み backend は共通の CLI から切り替えます。  
+現在は `wav2vec2` と `birdnet` を実装済みで、`perch` は契約だけ先に登録しています。
 
-## 何を作るのか
+共通ルール:
 
-audio 側では、`qid` ごとに複数の音声クリップを持つことを想定します。  
-クリップは `audio_id` で識別し、`qid` と 1 対多で対応させます。
+- 出力先は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/`
+- `embeddings.npy` と `audio_manifest.tsv` の行順を揃える
+- `audio_ids.json` と `qids.json` は行順に対応させる
+- 失敗した入力は `failed_items.json` に残す
 
-つまり、次のような対応です。
+backend ごとの既定:
 
-- audio item ID 一覧
-  - `audio_ids.json`
-- QID 一覧
-  - `qids.json`
-- 音声メタデータ
-  - `audio_manifest.tsv`
-- 埋め込み本体
-  - `embeddings.npy`
-- 補助情報
-  - `metadata.json`
-  - `summary.json`
+- `wav2vec2`
+  - window: ファイル全体
+  - 目的: ベースライン
+  - 必要な Python 系: `torch`, `torchaudio`, `transformers`
+  - 必要なシステム系: `ffmpeg`
+- `birdnet`
+  - window: 3 秒
+  - 既定サンプルレート: 48 kHz
+  - 目的: 鳥類特化の基準
+  - 必要な Python 系: `birdnet`, `tensorflow`, `tensorflow-hub`, `soundfile`
+  - 必要なシステム系: `ffmpeg`, `libsndfile`
+- `perch`
+  - window: 5 秒
+  - 目的: Perch-Hoplite の既定窓幅に合わせる
+  - 必要な Python 系: `perch-hoplite`, `tensorflow`, `tensorflow-hub`, `jax`, `soundfile`
+  - 必要なシステム系: `ffmpeg`, `libsndfile`
 
-この構成にすると、`audio_ids[i]` の埋め込みは `embeddings[i]` で直接引けます。  
-必要なら `qids[i]` から、その `qid` に属する複数クリップをたどれます。
+## 音声埋め込み
 
-## 入出力
+BirdNET を使う例:
 
-入力候補:
-- 音声ファイル本体
-- 収録メタデータ
-- `qid` とファイル名の対応表
-- 録音元・観測地点・日時などの補助情報
-
-生成物の候補:
-- `data/raw/xeno-canto/after_202505/`
-- `data/external/audio/`
-- `data/external/audio/<dataset>/<backend>/`
-- `audio_ids.json`
-- `qids.json`
-- `audio_manifest.tsv`
-- `embeddings.npy`
-- `metadata.json`
-- `summary.json`
-
-新しく作られる可能性のあるディレクトリ:
-- `data/raw/xeno-canto/after_202505/`
-- `data/raw/xeno-canto/after_202505/<qid>/`
-- `data/external/audio/`
-- `data/external/audio/<dataset>/`
-- `data/external/audio/<dataset>/<backend>/`
-
-dataset 単位でディレクトリを分けると、録音ソースごとの前処理や評価条件を分離しやすくなります。  
-backend 単位でも分けると、`wav2vec`、`perch`、`birdnet` の出力を混在させずに比較できます。
-
-## 事前準備
-
-この README に沿って audio 側の処理を始める前に、少なくとも次が整っている必要があります。
-
-1. `qid` と音声ファイルの対応表を用意する
-2. 音声ファイルの配置ルールを決める
-3. `audio_id` の採番ルールを決める
-4. `qid` ごとの複数クリップをどう扱うか決める
-
-## ID 体系
-
-audio 側では、`qid` とクリップ ID を分けます。
-
-採用候補:
-
-- `audio_id`
-  - 1 つの音声クリップを識別する ID
-- `qid`
-  - 鳥類 entity の主キー
-- `source`
-  - どのデータセットや出典から来たか
-
-推奨形式:
-
-- `"{qid}_{source}_{ordinal}"`
-
-例:
-
-- `Q5113_xeno_canto_0`
-- `Q5113_xeno_canto_1`
-- `Q5113_local_archive_0`
-
-`ordinal` は同一 `qid`・同一 `source` の中で複数候補があるときの連番で、重要度ではありません。
-
-## Row Alignment
-
-graph 側や language 側と同じく、埋め込み行は 1 つの ID 列に対応させます。
-
-audio 側では、その行対応の主キーを `audio_id` にします。
-
-必要なら補助的に `qid` を並行保存して、`audio_id -> qid` の関係を保持します。
-
-## Candidate Sources
-
-今後の候補としては、次のような音声表現が考えられます。
-
-- 鳴き声の元 WAV ファイル
-- その切り出しクリップ
-- スペクトログラム画像
-- 手作業で切り出した高品質区間
-
-最初の実装では、音声ファイル単位の埋め込みを基本にして、必要に応じて短いクリップ単位へ分割するのが扱いやすいです。
-
-## Output Layout
-
-各 dataset ごとに別ディレクトリを作る想定です。
-
-```text
-data/raw/xeno-canto/after_202505/
-├── <qid>/
-│   └── XCxxxxxx.mp3
-├── audio_manifest.tsv
-├── audio_ids.json
-├── qids.json
-├── metadata.json
-└── summary.json
-
-data/external/audio/
-├── <dataset>/
-│   ├── audio_manifest.tsv
-│   ├── audio_ids.json
-│   ├── qids.json
-│   ├── embeddings.npy
-│   ├── metadata.json
-│   └── summary.json
+```bash
+make build-audio-embeddings
 ```
 
-## File Semantics
+直接 CLI を叩く場合:
 
-- `data/raw/xeno-canto/after_202505/<qid>/XCxxxxxx.mp3`
-  - Xeno-canto から取得した生音声ファイルです
-- `audio_manifest.tsv`
-  - `audio_id`、`qid`、ファイルパス、長さ、サンプリングレート、出典などを並べる
-- `audio_ids.json`
-  - row-aligned な audio item ID 一覧
-- `qids.json`
-  - 同じ順序の `qid` 一覧
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
+  --backend birdnet \
+  --input-dir data/raw/xeno-canto \
+  --output-dir data/external/embeddings/audio \
+  --model-name birdnet-acoustic-2.4-tf \
+  --device cpu \
+  --batch-size 8 \
+  --max-seconds 30
+```
+
+このコマンドは入力ディレクトリ配下を再帰的に走査し、BirdNET なら 3 秒窓ごとに埋め込みを作ります。  
+出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
+
+生成物:
+
 - `embeddings.npy`
-  - `audio_ids.json` の順に並ぶ行列
+- `audio_ids.json`
+- `qids.json`
+- `audio_manifest.tsv`
 - `metadata.json`
-  - 使用した前処理、特徴量抽出器、対象データセットなど
 - `summary.json`
-  - `item_count`
-  - `unique_qid_count`
-  - `dataset`
-  - `source_counts`
+- `failed_items.json`
 
-## Deterministic Ordering
+## Xeno-canto
 
-順番は意味的な優先順位ではなく、再現性のために固定します。
+### 1. API JSON を保存する
 
-推奨順序:
+```bash
+make fetch-xeno-canto-recording-json
+```
 
-1. `qid` の昇順
-2. `source` の昇順
-3. `ordinal` の昇順
-4. ファイル名の昇順
+直接 CLI を叩く場合:
 
-## Audio Model Baseline
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli fetch-xeno-canto-recording-json \
+  --input data/interim/wikidata/bird_xeno_canto_ids.tsv \
+  --output-dir data/interim/xeno-canto/api_recordings \
+  --api-key "$XENO_CANTO_API_KEY"
+```
 
-最初の実装候補は、次の 3 系列を並行比較する方針です。
+入力は `data/interim/wikidata/bird_xeno_canto_ids.tsv` です。  
+各 `xeno_canto_species_id` に対して `api/3/recordings` を取得し、JSON を `data/interim/xeno-canto/api_recordings/<qid>/` に保存します。  
+検索条件は品質 `A` を含みます。
 
-### 汎用音声
+### 2. API JSON から recording-id を抽出する
 
-- `wav2vec`
-  - 汎用音声表現の基準として使う
-  - 鳥類に限らない比較基準を持てる
+```bash
+make extract-xeno-canto-recording-ids
+```
 
-### 生態音響
+直接 CLI を叩く場合:
 
-- `Perch`
-  - 動物音声・保全用途の表現として使う
-  - 鳥類以外も含む bioacoustics 比較に向く
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli extract-xeno-canto-recording-ids \
+  --input data/interim/xeno-canto/api_recordings/api_recordings_manifest.json \
+  --output-json data/interim/xeno-canto/recording_map.json
+```
 
-### 鳥類特化
+`api_recordings_manifest.json` を読み、`xeno_canto_species_id -> recording_id` の対応を `recording_map.json` に保存します。  
+API 応答の `recordings[].file` が音声ダウンロード URL です。
 
-- `BirdNET`
-  - 鳥種識別の強い基準として使う
-  - 鳥類データに最も近い比較軸になる
-  - 論文公開は 2021-01-27（Ecological Informatics の online publication）で、GitHub の BirdNET-Analyzer リポジトリでは少なくとも 2025-11-07 の `v2.4.0` リリースが確認できる
-  - この repo の git 履歴上では、現時点で追える最初の commit は 2026-04-11 で、BirdNET 関連のメモを置く際の参照点として使える
-  - 公式サイトは continuous data-driven updates を掲げているため、モデル版によっては学習データが更新・追加されている可能性がある
-  - ただし、公開情報だけでは各版の学習データ差分や明確なカットオフ日は追えないことがある
-  - `birdnet` Python パッケージは `0.1.7`（2025-03-19）を採用候補とする
-  - これは、`2025-04` 以前のモデルを確実に入手し、学習側と評価側を分離しやすくするためである
-
-まずは backend ごとに特徴抽出器を固定し、`audio_id` と行の対応を壊さないことを優先します。
-
-## API Shape
-
-graph 側や language 側と同じく、次の形が扱いやすいです。
-
-- `audio_ids`
-- `qids`
-- `embeddings`
-- `metadata`
-
-主な参照関数は次のとおりです。
-
-- `get(audio_id)`
-- `get_many(audio_ids)`
-- `audio_for_qid(qid)`
-
-## Non-Goals
-
-- 1 つの `qid` に対する代表音声の優先順位付け
-- 複数 dataset を 1 つのストアに混ぜること
-- 画像やテキストと音声を同一の ID 空間に押し込むこと
-
-## Xeno-canto Download
-
-Xeno-canto の音声取得は次のコマンドで行います。
+### 3. recording-id から音声を取得する
 
 ```bash
 make fetch-xeno-canto-audio
 ```
 
-既定では `bird_ontology.pkl` から `xeno_canto_species_id` を読み、`2025-05-01` 以降に投稿された録音を各 `qid` につき最大 10 件まで取得します。  
-保存先は `data/raw/xeno-canto/after_202505/<qid>/` です。
+直接 CLI を叩く場合:
 
-## 関連箇所
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli fetch-xeno-canto-audio \
+  --input data/interim/xeno-canto/recording_map.json \
+  --output-dir data/raw/xeno-canto \
+  --limit-per-qid 30 \
+  --clip-seconds 30
+```
 
-- [README.md](README.md)
-  - リポジトリ全体の入口です
-- [README_graph.md](README_graph.md)
-  - `qid` 主キーの保存形式の参考になります
-- [README_language.md](README_language.md)
-  - `surface_id` と `qid` を分ける考え方の参考になります
-- [data/README.md](data/README.md)
-  - データ配置ルールです
+各録音は `file` URL から取得し、`data/raw/xeno-canto/<qid>/<recording_id>.<file_type>` に保存します。  
+`recording_id` は `XC` を外した数値部分です。`ffmpeg` が必要です。

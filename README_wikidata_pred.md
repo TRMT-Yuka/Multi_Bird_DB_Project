@@ -128,10 +128,6 @@ make extract-xeno-canto-ids
 
 `bird_ontology.pkl` から `xeno_canto_species_id` を持つ行だけを抜き出し、`qid` と `xeno_canto_species_id` の対応表を作ります。
 
-### 7. graph 側の処理
-
-taxonomy graph の構築、埋め込み、Dash viewer は [README_graph.md](README_graph.md) を参照してください。
-
 ## 出力
 
 - `data/interim/wikidata/bird_qids.tsv`

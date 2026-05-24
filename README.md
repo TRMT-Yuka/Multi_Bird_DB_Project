@@ -24,8 +24,10 @@
     - taxonomy graph PKL 生成
     - graph からの埋め込み生成
     - taxonomy graph の Dash viewer
+  - `audio 側`
+    - Xeno-canto 音声の再帰走査と wav2vec2 埋め込み生成
 - 未実装または今後整理
-  - 音声データ処理
+  - BirdNET / Perch などの他音声バックエンド比較
 
 ## 読み方
 

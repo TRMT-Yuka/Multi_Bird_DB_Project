@@ -13,11 +13,14 @@ data/                                     # このプロジェクトで扱う全
 │   │   ├── query.tsv                     # Bird 配下の entity URL 一覧
 │   │   └── dumps/                        # Wikidata JSON dump の保存先
 │   └── xeno-canto/                       # Xeno-canto の生音声保存先
-│       └── after_202505/                 # 2025-05 以降の録音を QID ごとに保存
 ├── interim/                              # 処理途中で生成される中間データ
-│   └── wikidata/                         # Wikidata の処理作業領域
-│       ├── bird_qids.tsv                 # QID 抽出結果
-│       └── json/                         # QID ごとの JSON 応答
+│   ├── wikidata/                         # Wikidata の処理作業領域
+│   │   ├── bird_qids.tsv                 # QID 抽出結果
+│   │   └── json/                         # QID ごとの JSON 応答
+│   └── xeno-canto/                       # Xeno-canto の中間生成物
+│       ├── api_recordings/               # API JSON の保存先
+│       ├── api_recordings_manifest.json  # API JSON 保存結果
+│       └── recording_map.json            # species_id -> recording_id, download_url の対応表
 ├── processed/                            # 下流利用向けに整形済みの成果物
 │   ├── bird_ontology.pkl                 # 鳥類 ontology の構造化成果物
 │   ├── graph/                            # graph モダリティの成果物
@@ -37,14 +40,18 @@ data/                                     # このプロジェクトで扱う全
   - 手動で取得して配置する Bird 配下 entity の入力 TSV です
 - `raw/wikidata/dumps/latest-all.json.bz2`
   - Wikidata 全量 JSON dump です
-- `raw/xeno-canto/after_202505/<qid>/`
+- `raw/xeno-canto/<qid>/`
   - Xeno-canto から取得した生音声ファイルです
-- `raw/xeno-canto/after_202505/audio_manifest.tsv`
-  - `qid` ごとに取得した音声ファイルの一覧です
 - `interim/wikidata/bird_qids.tsv`
   - `query.tsv` から抽出した QID 一覧です
 - `interim/wikidata/bird_xeno_canto_ids.tsv`
   - ontology から抜き出した `qid` と `xeno_canto_species_id` の対応表です
+- `interim/xeno-canto/api_recordings/`
+  - Xeno-canto API の JSON 応答を保存する領域です
+- `interim/xeno-canto/api_recordings_manifest.json`
+  - 保存した API 応答の一覧です
+- `interim/xeno-canto/recording_map.json`
+  - `xeno_canto_species_id` と `recording_id` / `download_url` の対応表です
 - `interim/wikidata/json/Qxxxx.json`
   - dump から切り出した個別 entity JSON です
   - 実際には `interim/wikidata/json/<1桁目>/<2桁目>/Qxxxx.json` の階層で保存します
@@ -66,6 +73,8 @@ data/                                     # このプロジェクトで扱う全
   - graph の GraphSAGE 埋め込みです
 - `external/embeddings/graph/transe/<MMDDhhmm>/`
   - graph の TransE 埋め込みです
+- `external/embeddings/audio/<model>/<MMDDhhmm>/`
+  - 音声ファイルから作る wav2vec2 系の埋め込みです
 - `external/embeddings/graph/evaluation/`
   - graph 埋め込みのクラスタリング評価結果・レポートです
 - `external/sqlite/taxonomy/bird_taxonomy.sqlite`
@@ -178,5 +187,7 @@ graph metadata:
 - `interim/wikidata/json/<1桁目>/<2桁目>/Qxxxx.json` は中間生成物として扱う
 - `interim/wikidata/local_dump_extract_checkpoint.json` は個人用の再開状態であり、Git に入れないローカルファイルとして扱う
 - `interim/wikidata/bird_xeno_canto_ids.tsv` は `bird_ontology.pkl` から再生成できる中間成果物として扱う
-- `raw/xeno-canto/after_202505/` は Xeno-canto から取得した生音声の置き場として扱う
+- `interim/xeno-canto/api_recordings/` は Xeno-canto API 応答の中間成果物として扱う
+- `interim/xeno-canto/recording_map.json` は API 応答から再生成できる中間成果物として扱う
+- `raw/xeno-canto/` は Xeno-canto から取得した生音声の置き場として扱う
 - `processed/` は下流利用の成果物を置く

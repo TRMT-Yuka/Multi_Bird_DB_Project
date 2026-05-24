@@ -23,6 +23,19 @@ language-bert = [
     "torch",
     "transformers",
 ]
+audio-birdnet = [
+    "birdnet",
+    "tensorflow",
+    "tensorflow-hub",
+    "soundfile",
+]
+audio-perch = [
+    "jax",
+    "perch-hoplite",
+    "tensorflow",
+    "tensorflow-hub",
+    "soundfile",
+]
 
 [project.scripts]
 multi-bird-db = "multi_bird_db.cli:main"
