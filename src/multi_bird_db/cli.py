@@ -4,7 +4,21 @@ import argparse
 import json
 from collections.abc import Callable
 
-from . import dump_extract, embeddings, graph, graph_dash, graph_evaluation, language_embeddings, ontology, qids, sqlite_store, wikipedia_articles, xeno_canto_audio, xeno_canto_ids
+from . import (
+    audio_embeddings,
+    dump_extract,
+    embeddings,
+    graph,
+    graph_dash,
+    graph_evaluation,
+    language_embeddings,
+    ontology,
+    qids,
+    sqlite_store,
+    wikipedia_articles,
+    xeno_canto_audio,
+    xeno_canto_ids,
+)
 
 
 def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
@@ -75,11 +89,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_arguments(
         subparsers.add_parser(
+            "fetch-xeno-canto-recording-json",
+            help="Fetch and save Xeno-canto API JSON responses per species.",
+        ),
+        xeno_canto_audio.build_api_recordings_parser().parse_args([]),
+        ["input", "output_dir", "api_key", "per_page", "max_pages", "sleep_seconds"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "extract-xeno-canto-recording-ids",
+            help="Extract recording IDs from saved Xeno-canto API JSON files.",
+        ),
+        xeno_canto_audio.build_recording_map_parser().parse_args([]),
+        ["input", "output_json", "output_tsv"],
+    )
+    add_arguments(
+        subparsers.add_parser(
             "fetch-xeno-canto-audio",
             help="Download Xeno-canto audio files into per-QID raw directories.",
         ),
-        xeno_canto_audio.build_parser().parse_args([]),
-        ["input", "output_dir", "since_date", "limit_per_qid", "max_pages", "sleep_seconds"],
+        xeno_canto_audio.build_audio_parser().parse_args([]),
+        ["input", "output_dir", "limit_per_qid", "clip_seconds", "sleep_seconds"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "build-audio-embeddings",
+            help="Build wav2vec2-based embeddings from a directory tree of audio files.",
+        ),
+        audio_embeddings.build_parser().parse_args([]),
+        [
+            "backend",
+            "input_dir",
+            "output_dir",
+            "model_name",
+            "device",
+            "batch_size",
+            "max_seconds",
+            "target_sample_rate",
+            "extensions",
+            "cache_dir",
+        ],
     )
     add_arguments(
         subparsers.add_parser("build-graph", help="Build taxonomy graph PKL from ontology PKL."),
@@ -207,10 +256,36 @@ def main(argv: list[str] | None = None) -> int:
         "extract-dump-json": (dump_extract.main, [], ["input", "dump", "output_dir"]),
         "build-ontology": (ontology.main, [], ["json_dir", "output", "root_qid"]),
         "extract-xeno-canto-ids": (xeno_canto_ids.main, [], ["input", "output"]),
+        "fetch-xeno-canto-recording-json": (
+            xeno_canto_audio.main_api_recordings,
+            [],
+            ["input", "output_dir", "api_key", "per_page", "max_pages", "sleep_seconds"],
+        ),
+        "extract-xeno-canto-recording-ids": (
+            xeno_canto_audio.main_recording_map,
+            [],
+            ["input", "output_json", "output_tsv"],
+        ),
         "fetch-xeno-canto-audio": (
             xeno_canto_audio.main,
             [],
-            ["input", "output_dir", "since_date", "limit_per_qid", "max_pages", "sleep_seconds"],
+            ["input", "output_dir", "limit_per_qid", "clip_seconds", "sleep_seconds"],
+        ),
+        "build-audio-embeddings": (
+                audio_embeddings.main,
+                [],
+                [
+                    "backend",
+                    "input_dir",
+                    "output_dir",
+                    "model_name",
+                "device",
+                "batch_size",
+                "max_seconds",
+                "target_sample_rate",
+                "extensions",
+                "cache_dir",
+            ],
         ),
         "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
         "build-sqlite": (sqlite_store.main, [], ["input", "output", "root_qid"]),

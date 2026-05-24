@@ -5,13 +5,13 @@
 ## 概要
 
 - `language 側` の設計をまとめる
-- 入力候補は `bird_ontology.pkl` や、それから派生するテキスト・ラベル情報
+- 入力は `bird_ontology.pkl` です
 - `en` と `ja` を分ける
 - 各言語ディレクトリには、その言語の表現だけを入れる
 - `qid` 1 件に対して複数の `surface_id` を持つ
 - `surface_id` と `embeddings.npy` の行を 1 対 1 で対応させる
 - 代表表現かどうかの順位づけはしない
-- 出力は `EmbeddingStore` 風の保存形式を想定する
+- 出力は `surface_ids`・`qids`・`embeddings` を同じ行順で持つ保存形式にする
 
 ## 最初に読む場所
 
@@ -28,8 +28,7 @@
 
 ## 何を作るのか
 
-言語側では、`qid` ごとに複数の言語 surface を作ります。  
-graph 側と同じく、**1 列の ID 配列をそのまま埋め込み行列の行番号に対応させる** 方式を基本にします。
+言語側では、`qid` ごとに複数の言語 surface を作り、`surface_id` の行と `embeddings.npy` の行を 1 対 1 で対応させます。
 
 つまり、次のような対応です。
 
@@ -47,7 +46,7 @@ graph 側と同じく、**1 列の ID 配列をそのまま埋め込み行列の
   - `summary.json`
 
 この構成にすると、`surface_ids[i]` の埋め込みは `embeddings[i]` で直接引けます。  
-必要なら `qids[i]` から、その qid に属する複数 item をたどれます。
+`qids[i]` から、その qid に属する複数表現をたどれます。
 
 ## 入出力
 
@@ -58,11 +57,11 @@ graph 側と同じく、**1 列の ID 配列をそのまま埋め込み行列の
 生成物:
 - `data/external/embeddings/language/en/`
 - `data/external/embeddings/language/ja/`
+- `surface_manifest.tsv`
 - `surface_ids.json`
 - `qids.json`
-- `surface_manifest.tsv`
-- `embeddings.npy`
 - `qid_to_surfaces.json`
+- `embeddings.npy`
 - `metadata.json`
 - `summary.json`
 
@@ -75,21 +74,14 @@ graph 埋め込みと同じく、language 側も `en/` と `ja/` を別ディレ
 
 ## 事前準備
 
-この README に沿って言語側の埋め込み設計を始める前に、少なくとも次が整っている必要があります。
-
-1. `README_wikidata_pred.md` の手順に従って `bird_ontology.pkl` を生成する
-2. `data/processed/bird_ontology.pkl` が存在することを確認する
-3. `README_graph.md` の保存形式に目を通し、ID と行の対応ルールを揃える
-
-`bird_ontology.pkl` が存在しない状態では、言語側に使う元データの抽出ができません。
+`bird_ontology.pkl` が存在していることを確認します。これが言語側の唯一の入力です。
 
 ## 実行
 
-この節は、言語側で実際に何を揃えるべきかを簡単に整理したものです。  
-`surface_id` と表記の対応表だけを先に確認したい場合は、`make build-language-surface-manifest` を使えます。
-`surface_id` まで含めた BERT 埋め込みを作る場合は、`make build-language-embeddings` を使えます。
-`make build-language-embeddings` を使う前に、`torch` と `transformers`、日本語側では `fugashi` と `unidic-lite` を入れてください。`pip install -e '.[language-bert]'` を使うとまとめて入れられます。
-GPU 利用可否を確認したい場合は `make check-gpu` を使えます。`cuda_available` が false なら、その環境では GPU は見えていません。
+`surface_id` と表記の対応表は `make build-language-surface-manifest` で作れます。  
+`BERT` 埋め込みは `make build-language-embeddings` で作れます。  
+`build-language-embeddings` は `torch` と `transformers` を使い、日本語側では `fugashi` と `unidic-lite` も使います。`pip install -e '.[language-bert]'` でまとめて入れられます。  
+GPU を使う場合は `--device cuda` を指定します。`make check-gpu` で CUDA の見え方を確認できます。
 
 ### 実行の早見表
 
@@ -116,48 +108,38 @@ GPU 利用可否を確認したい場合は `make check-gpu` を使えます。`
 cd Multi_Bird_DB_Project
 ```
 
-### 1. 言語 surface の ID 体系を決める
+### 1. 言語 surface の ID 体系
 
-ここで決めるのは、`qid` の中にある各言語表現をどう識別するかです。
-
-採用する形式:
-- `"{qid}_{lang}_{ordinal}"`
-
-例:
-- `Q1591110_en_0`
-- `Q1591110_en_1`
-- `Q1591110_ja_0`
+採用する形式は `"{qid}_{lang}_{ordinal}"` です。
 
 ### 2. ID の順番を固定する
 
-graph 側と同じく、`surface_id` の順番を固定し、その順番を埋め込みの行番号に対応させます。
-
-想定:
-- `surface_ids[i]`
-- `embeddings[i]`
+`surface_ids[i]` と `embeddings[i]` を同じ順番で対応させます。
 
 ### 3. メタデータを揃える
 
-最低限、次の情報を `metadata.json` に残すと後で追跡しやすくなります。
+`metadata.json` には、実装では主に次の情報が入ります。
 
 - `created_at_utc`
-- `source`
-- `languages`
-- `item_sources`
-- `input_files`
-- `parameters`
+- `language`
+- `input_file`
+- `encoder_model`
+- `device`
+- `batch_size`
+- `max_length`
+- `pooling`
+- `surface_id_pattern`
+- `qid_to_surfaces_format`
+- `item_count`
+- `unique_qid_count`
+- `embedding_dim`
+- `source_counts`
 
-### 4. 保存形式を graph 側と合わせる
+### 4. 保存形式
 
-graph 側では、以下の 3 点を 1 セットにしています。
+graph 側は `embeddings.npy`、`qids.json`、`metadata.json` を 1 セットにしています。
 
-- `embeddings.npy`
-- `qids.json`
-- `metadata.json`
-
-language 側では、`surface_ids.json` を追加して同じ並びにしておくと、読み込み側の実装を共通化しやすくなります。
-`surface_ids.json` に加えて、確認用の `surface_manifest.tsv` を出しておくと、`surface_id` と実際の表記の対応を目視しやすくなります。
-`qid -> surface_ids` を確認したい場合は、`qid_to_surfaces.json` を見ると機械処理しやすいです。
+language 側は `surface_ids.json`、`qids.json`、`qid_to_surfaces.json`、`embeddings.npy`、`metadata.json`、`summary.json` を同じ順番で保存します。`surface_manifest.tsv` は確認用です。
 
 ### 5. BERT 埋め込みを生成する
 
@@ -178,46 +160,6 @@ make build-language-embeddings
 
 このコマンドは `surface_manifest.tsv` で作った `surface_id` 順を保ったまま、英語は `google-bert/bert-base-uncased`、日本語は `tohoku-nlp/bert-base-japanese-v3` を使って埋め込みを作ります。既定では CPU を使います。GPU を使いたい場合は `--device cuda` を指定できますが、`torch` と `transformers` が別途必要です。
 
-## language 側の構成案
-
-採用方針:
-- `en` と `ja` を別ストアにする
-- 各ストアの中では、`qid` ごとの複数表現をすべて保持する
-- 代表表現かどうかは重要度として扱わない
-- 各 row は `surface_id` で識別する
-
-## 参照元の候補
-
-`bird_ontology.pkl` には、言語別の表現に使える情報があります。
-
-- `en_name`
-- `ja_name`
-- `en_aliases`
-- `ja_aliases`
-- `enwiki_title`
-- `jawiki_title`
-
-これらを使うと、言語ごとの `qid` と説明文の対応表を作れます。
-
-## 対応表メモ
-
-今の `graph 側` と同じ考え方で、`language 側` でも対応表を別ファイルに置くのがよさそうです。  
-今回は [docs/language_embeddings_design.md](docs/language_embeddings_design.md) に `surface_id` の形式と保存レイアウトをまとめました。
-
-## 保存形式の想定
-
-graph 側の `EmbeddingStore` に合わせるなら、言語側も次の形が扱いやすいです。
-
-- `surface_ids`
-  - row-aligned な言語 surface ID 一覧
-- `qids`
-  - `surface_ids` と同じ順番の entity QID 一覧
-- `embeddings`
-  - `surface_ids` と同じ順番の行列
-- `metadata`
-  - 生成条件や対象データの情報
-
-この構造にしておくと、`get(surface_id)` と `get_many(surface_ids)` のような参照方法をそのまま流用できます。`source` は必要なら `metadata.json` や補助表に逃がします。
 
 ## 関連箇所
 

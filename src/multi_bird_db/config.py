@@ -35,7 +35,9 @@ class ProjectPaths:
     graph_embeddings_dir: Path
     raw_audio_dir: Path
     xeno_canto_raw_dir: Path
-    xeno_canto_after_202505_dir: Path
+    xeno_canto_interim_dir: Path
+    audio_embeddings_dir: Path
+    xeno_canto_recording_map_json: Path
     audio_dir: Path
     xeno_canto_audio_dir: Path
     sqlite_dir: Path
@@ -54,7 +56,9 @@ def get_project_paths() -> ProjectPaths:
     embeddings_dir = root / "data" / "external" / "embeddings"
     raw_audio_dir = root / "data" / "raw" / "audio"
     xeno_canto_raw_dir = root / "data" / "raw" / "xeno-canto"
+    xeno_canto_interim_dir = root / "data" / "interim" / "xeno-canto"
     audio_dir = root / "data" / "external" / "audio"
+    audio_embeddings_dir = embeddings_dir / "audio"
     graph_dir = processed_dir / "graph"
     documents_dir = root / "data" / "external" / "documents"
     sqlite_dir = root / "data" / "external" / "sqlite"
@@ -89,7 +93,9 @@ def get_project_paths() -> ProjectPaths:
         graph_embeddings_dir=embeddings_dir / "graph",
         raw_audio_dir=raw_audio_dir,
         xeno_canto_raw_dir=xeno_canto_raw_dir,
-        xeno_canto_after_202505_dir=xeno_canto_raw_dir / "after_202505",
+        xeno_canto_interim_dir=xeno_canto_interim_dir,
+        audio_embeddings_dir=audio_embeddings_dir,
+        xeno_canto_recording_map_json=xeno_canto_interim_dir / "recording_map.json",
         audio_dir=audio_dir,
         xeno_canto_audio_dir=audio_dir / "xeno-canto",
         sqlite_dir=sqlite_dir,
