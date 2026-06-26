@@ -38,7 +38,7 @@ class XenoCantoApiWorkflowTests(unittest.TestCase):
             with input_tsv.open("w", encoding="utf-8", newline="") as handle:
                 writer = csv.DictWriter(handle, delimiter="\t", fieldnames=["qid", "xeno_canto_species_id"])
                 writer.writeheader()
-                writer.writerow({"qid": "Q111674", "xeno_canto_species_id": "Corvus-macrorhynchos"})
+                writer.writerow({"qid": "Q122868", "xeno_canto_species_id": "Corvus-macrorhynchos"})
 
             api_output_dir = root / "api_recordings"
             page_1_url = xeno_canto_audio.api_recordings_url("Corvus-macrorhynchos", api_key="demo", page=1, per_page=100)
@@ -68,20 +68,18 @@ class XenoCantoApiWorkflowTests(unittest.TestCase):
                 fetch_json_fn=lambda url: payloads[url],
             )
 
-            manifest_path = api_output_dir / "api_recordings_manifest.json"
             summary_path = api_output_dir / "api_recordings_summary.json"
-            self.assertTrue(manifest_path.exists())
             self.assertTrue(summary_path.exists())
             self.assertEqual(result["summary"]["target_qid_count"], 1)
 
-            page_1_path = api_output_dir / "Q111674" / "page001.json"
-            page_2_path = api_output_dir / "Q111674" / "page002.json"
+            page_1_path = api_output_dir / "Q122868" / "page001.json"
+            page_2_path = api_output_dir / "Q122868" / "page002.json"
             self.assertTrue(page_1_path.exists())
             self.assertTrue(page_2_path.exists())
 
             recording_map_json = root / "recording_map.json"
             map_result = xeno_canto_audio.build_xeno_canto_recording_map_from_api(
-                manifest_path=manifest_path,
+                input_path=api_output_dir,
                 output_json=recording_map_json,
             )
             self.assertTrue(recording_map_json.exists())
@@ -116,10 +114,30 @@ class XenoCantoApiWorkflowTests(unittest.TestCase):
             )
 
             self.assertEqual(downloaded_urls, ["https://xeno-canto.org/111/download", "https://xeno-canto.org/112/download"])
-            self.assertTrue((audio_output_dir / "Q111674" / "111.mp3").exists())
-            self.assertTrue((audio_output_dir / "Q111674" / "112.mp3").exists())
+            self.assertTrue((audio_output_dir / "Q122868" / "111.mp3").exists())
+            self.assertTrue((audio_output_dir / "Q122868" / "112.mp3").exists())
+            self.assertTrue((audio_output_dir / "existing_audio_manifest.json").exists())
             self.assertEqual(audio_result["downloaded_qid_count"], 1)
             self.assertEqual(audio_result["status_rows"][0]["selected_count"], 2)
+
+            second_download_calls: list[str] = []
+
+            def fail_if_downloaded(url: str) -> bytes:
+                second_download_calls.append(url)
+                raise AssertionError("download should have been skipped for existing files")
+
+            second_result = xeno_canto_audio.fetch_audio_from_recording_map(
+                input_path=recording_map_json,
+                output_dir=audio_output_dir,
+                limit_per_qid=10,
+                clip_seconds=30,
+                sleep_seconds=0,
+                download_bytes_fn=fail_if_downloaded,
+                clip_audio_fn=fake_clip_audio,
+            )
+
+            self.assertEqual(second_download_calls, [])
+            self.assertEqual(second_result["status_rows"][0]["selected_count"], 2)
 
 
 if __name__ == "__main__":

@@ -30,8 +30,7 @@ audio-birdnet = [
     "soundfile",
 ]
 audio-perch = [
-    "jax",
-    "perch-hoplite",
+    "bioacoustics-model-zoo",
     "tensorflow",
     "tensorflow-hub",
     "soundfile",
