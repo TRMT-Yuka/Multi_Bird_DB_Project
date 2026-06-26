@@ -11,10 +11,12 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import Any
+from threading import Lock
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
@@ -23,12 +25,12 @@ from .config import get_project_paths
 
 USER_AGENT = "Multi_Bird_DB_Project/0.1 (research and educational use; contact: local-project)"
 DEFAULT_SINCE_DATE = date(2025, 5, 1)
-DEFAULT_LIMIT_PER_QID = 30
-DEFAULT_MAX_PAGES = 20
+DEFAULT_LIMIT_PER_QID = 20
+DEFAULT_MAX_PAGES = 1
 DEFAULT_SLEEP_SECONDS = 0.25
-DEFAULT_CLIP_SECONDS = 30
+DEFAULT_CLIP_SECONDS = 15
 DEFAULT_HTTP_TIMEOUT_SECONDS = 30.0
-DEFAULT_API_PER_PAGE = 100
+DEFAULT_API_PER_PAGE = 20
 DEFAULT_API_KEY = "demo"
 DEFAULT_QUALITY = "A"
 RECORDING_ID_RE = re.compile(r"\bXC(\d{3,7})\b")
@@ -59,6 +61,7 @@ def load_targets(input_path: Path) -> list[dict[str, str]]:
 
     if not input_path.exists():
         raise FileNotFoundError(f"Input file does not exist: {input_path}")
+    leaf_qids = load_leaf_qids()
     suffix = input_path.suffix.lower()
     if suffix == ".tsv":
         with input_path.open("r", encoding="utf-8", newline="") as handle:
@@ -67,7 +70,7 @@ def load_targets(input_path: Path) -> list[dict[str, str]]:
             for row in reader:
                 qid = str(row.get("qid") or "").strip()
                 xeno_canto_species_id = str(row.get("xeno_canto_species_id") or "").strip()
-                if not qid or not xeno_canto_species_id:
+                if not qid or not xeno_canto_species_id or qid not in leaf_qids:
                     continue
                 rows.append({"qid": qid, "xeno_canto_species_id": xeno_canto_species_id})
             return rows
@@ -80,7 +83,7 @@ def load_targets(input_path: Path) -> list[dict[str, str]]:
         for row in data:
             qid = str(row.get("qid") or row.get("id") or "").strip()
             xeno_canto_species_id = str(row.get("xeno_canto_species_id") or "").strip()
-            if not qid or not xeno_canto_species_id:
+            if not qid or not xeno_canto_species_id or qid not in leaf_qids:
                 continue
             rows.append({"qid": qid, "xeno_canto_species_id": xeno_canto_species_id})
         return rows
@@ -134,6 +137,20 @@ def load_xeno_canto_api_key(api_key: str | None = None) -> str:
                 if value:
                     return value
     return DEFAULT_API_KEY
+
+
+def load_leaf_qids(graph_path: Path | None = None) -> set[str]:
+    """Load leaf QIDs from the taxonomy graph. / taxonomy graph から末端 QID を読む。"""
+
+    paths = get_project_paths()
+    path = graph_path or paths.taxonomy_graph_pkl
+    if not path.exists():
+        raise FileNotFoundError(f"Taxonomy graph does not exist: {path}")
+    with path.open("rb") as handle:
+        graph = pickle.load(handle)
+    if not hasattr(graph, "out_degree"):
+        raise ValueError(f"Taxonomy graph must be a graph object, got: {type(graph).__name__}")
+    return {str(node) for node in graph.nodes if graph.out_degree(node) == 0}
 
 
 def api_query_for_species_id(species_id: str, quality: str | None = DEFAULT_QUALITY) -> str:
@@ -316,24 +333,55 @@ def fetch_xeno_canto_recording_jsons(
     return {"manifest_path": str(manifest_path), "summary": summary, "manifest_rows": manifest_rows}
 
 
+def scan_api_recording_pages(input_dir: Path) -> list[dict[str, Any]]:
+    """Collect saved API page JSON paths from a directory tree. / 保存済み API JSON のディレクトリを走査する。"""
+
+    if not input_dir.exists():
+        raise FileNotFoundError(f"API recordings directory does not exist: {input_dir}")
+    if not input_dir.is_dir():
+        raise ValueError(f"API recordings input must be a directory, got: {input_dir}")
+
+    rows: list[dict[str, Any]] = []
+    for qid_dir in sorted(path for path in input_dir.iterdir() if path.is_dir()):
+        qid = qid_dir.name.strip()
+        if not qid:
+            continue
+        api_paths = sorted(str(path) for path in qid_dir.glob("page*.json"))
+        rows.append(
+            {
+                "qid": qid,
+                "api_paths": api_paths,
+            }
+        )
+    return rows
+
+
 def build_xeno_canto_recording_map_from_api(
-    manifest_path: Path,
+    input_path: Path,
     output_json: Path,
 ) -> dict[str, Any]:
     """Extract recording IDs and download URLs from saved API JSON pages. / API JSON から recording ID と download URL を抜き出す。"""
 
-    if not manifest_path.exists():
-        raise FileNotFoundError(f"API manifest does not exist: {manifest_path}")
-    with manifest_path.open("r", encoding="utf-8") as handle:
-        manifest = json.load(handle)
-    if not isinstance(manifest, list):
-        raise ValueError(f"API manifest must be a list, got: {type(manifest).__name__}")
+    if input_path.is_dir():
+        manifest = scan_api_recording_pages(input_path)
+        targets_by_qid = {row["qid"]: row for row in load_targets(get_project_paths().xeno_canto_ids_tsv)}
+    else:
+        if not input_path.exists():
+            raise FileNotFoundError(f"API input does not exist: {input_path}")
+        with input_path.open("r", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        if not isinstance(manifest, list):
+            raise ValueError(f"API manifest must be a list, got: {type(manifest).__name__}")
+        targets_by_qid = {}
 
     recording_map_rows: list[dict[str, Any]] = []
     for item in manifest:
         qid = str(item.get("qid") or "").strip()
         xeno_canto_species_id = str(item.get("xeno_canto_species_id") or "").strip()
         api_paths = [str(path) for path in item.get("api_paths") or []]
+        if not xeno_canto_species_id:
+            target_row = targets_by_qid.get(qid, {})
+            xeno_canto_species_id = str(target_row.get("xeno_canto_species_id") or "").strip()
         recording_ids: list[str] = []
         download_urls: list[str] = []
         seen: set[str] = set()
@@ -430,6 +478,47 @@ def write_json_atomic(output_path: Path, payload: Any) -> None:
     """Write JSON atomically. / JSON を原子的に書く。"""
 
     write_text_atomic(output_path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+
+def make_audio_temp_dir(output_dir: Path, qid: str, recording_id: str) -> Path:
+    """Create one project-local temporary directory for audio work. / 音声処理用のプロジェクト内一時ディレクトリを作る。"""
+
+    temp_root = output_dir.parent.parent / "temp" / "xeno-canto"
+    temp_dir = temp_root / qid / recording_id
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    return temp_dir
+
+
+def scan_existing_audio_files(output_dir: Path) -> list[dict[str, Any]]:
+    """Collect already existing audio files under the output root. / 出力先に既にある音声ファイルを集める。"""
+
+    existing_rows: list[dict[str, Any]] = []
+    if not output_dir.exists():
+        return existing_rows
+    for path in sorted(output_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.name.endswith(".tmp"):
+            continue
+        if path.name in {"existing_audio_manifest.json"}:
+            continue
+        try:
+            rel_path = path.relative_to(output_dir)
+        except ValueError:
+            continue
+        if len(rel_path.parts) < 2:
+            continue
+        qid = rel_path.parts[0]
+        recording_id = path.stem
+        existing_rows.append(
+            {
+                "qid": qid,
+                "recording_id": recording_id,
+                "path": str(rel_path),
+                "size": path.stat().st_size,
+            }
+        )
+    return existing_rows
 
 
 def parse_date(value: str) -> date:
@@ -589,6 +678,7 @@ def fetch_audio_from_recording_map(
     limit_per_qid: int = DEFAULT_LIMIT_PER_QID,
     sleep_seconds: float = DEFAULT_SLEEP_SECONDS,
     clip_seconds: int = DEFAULT_CLIP_SECONDS,
+    max_workers: int = 3,
     fetch_text_fn: Callable[[str], str] = fetch_text,
     download_bytes_fn: Callable[[str], bytes] = fetch_bytes,
     clip_audio_fn: Callable[[Path, Path, str, int], None] = clip_audio_file,
@@ -596,10 +686,23 @@ def fetch_audio_from_recording_map(
     """Download and clip audio using an extracted recording map. / 抽出済み recording map を使って音声を保存する。"""
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    existing_audio_manifest_path = output_dir / "existing_audio_manifest.json"
+    existing_audio_rows = scan_existing_audio_files(output_dir)
+    write_json_atomic(
+        existing_audio_manifest_path,
+        {
+            "dataset": "xeno-canto",
+            "output_dir": str(output_dir),
+            "item_count": len(existing_audio_rows),
+            "items": existing_audio_rows,
+        },
+    )
+    existing_audio_paths = {row["path"] for row in existing_audio_rows}
     targets = load_recording_map(input_path)
     status_rows: list[dict[str, Any]] = []
     failed_qids: list[str] = []
     total_targets = len(targets)
+    existing_audio_lock = Lock()
 
     for target_index, target in enumerate(targets, start=1):
         qid = target["qid"]
@@ -612,32 +715,53 @@ def fetch_audio_from_recording_map(
         _render_progress_line(
             f"audio {target_index}/{total_targets} | {qid} | 0/{len(recording_ids)} downloaded"
         )
+        task_specs: list[tuple[int, str, str, Path, str]] = []
         for ordinal, recording_id in enumerate(recording_ids):
             download_url = str(download_urls[ordinal]) if ordinal < len(download_urls) and str(download_urls[ordinal]).strip() else recording_download_url(recording_id)
             suffix = Path(urlparse(download_url).path).suffix.lstrip(".").lower()
             file_type = suffix if suffix in {"mp3", "wav"} else "mp3"
             local_path = qid_dir / f"{recording_id}.{file_type}"
+            task_specs.append((ordinal, recording_id, download_url, local_path, file_type))
+
+        def _download_one(spec: tuple[int, str, str, Path, str]) -> bool:
+            _, recording_id, download_url, local_path, file_type = spec
             try:
-                if local_path.exists() and local_path.stat().st_size > 0:
-                    pass
-                else:
-                    payload = download_bytes_fn(download_url)
-                    with tempfile.TemporaryDirectory() as tmpdir:
-                        tmp_input = Path(tmpdir) / f"{recording_id}.{file_type or 'mp3'}"
-                        write_bytes_atomic(tmp_input, payload)
-                        duration = probe_audio_duration_seconds(tmp_input)
-                        if duration is not None and duration <= clip_seconds:
-                            copy_audio_file(tmp_input, local_path)
-                        else:
-                            clip_audio_fn(tmp_input, local_path, file_type=file_type or "mp3", clip_seconds=clip_seconds)
+                relative_path = str(local_path.relative_to(output_dir))
+                with existing_audio_lock:
+                    if relative_path in existing_audio_paths:
+                        return True
+                    if local_path.exists() and local_path.stat().st_size > 0:
+                        existing_audio_paths.add(relative_path)
+                        return True
+                payload = download_bytes_fn(download_url)
+                tmp_dir = make_audio_temp_dir(output_dir, qid, recording_id)
+                tmp_input = tmp_dir / f"{recording_id}.{file_type or 'mp3'}"
+                try:
+                    write_bytes_atomic(tmp_input, payload)
+                    duration = probe_audio_duration_seconds(tmp_input)
+                    if duration is not None and duration <= clip_seconds:
+                        copy_audio_file(tmp_input, local_path)
+                    else:
+                        clip_audio_fn(tmp_input, local_path, file_type=file_type or "mp3", clip_seconds=clip_seconds)
+                finally:
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                with existing_audio_lock:
+                    existing_audio_paths.add(relative_path)
+                return True
             except (HTTPError, URLError):
-                continue
-            downloaded_count += 1
-            _render_progress_line(
-                f"audio {target_index}/{total_targets} | {qid} | {downloaded_count}/{len(recording_ids)} downloaded"
-            )
-            if sleep_seconds > 0:
-                time.sleep(sleep_seconds)
+                return False
+
+        if task_specs:
+            with ThreadPoolExecutor(max_workers=max(1, max_workers)) as executor:
+                future_map = {executor.submit(_download_one, spec): spec for spec in task_specs}
+                for future in as_completed(future_map):
+                    if future.result():
+                        downloaded_count += 1
+                        _render_progress_line(
+                            f"audio {target_index}/{total_targets} | {qid} | {downloaded_count}/{len(recording_ids)} downloaded"
+                        )
+                    if sleep_seconds > 0:
+                        time.sleep(sleep_seconds)
         if downloaded_count == 0:
             failed_qids.append(qid)
         _finish_progress_line(
@@ -657,6 +781,7 @@ def fetch_audio_from_recording_map(
         "failed_qid_count": len(failed_qids),
         "failed_qids": failed_qids[:50],
         "status_rows": status_rows,
+        "existing_audio_manifest_path": str(existing_audio_manifest_path),
     }
 
 
@@ -680,7 +805,7 @@ def build_recording_map_parser() -> argparse.ArgumentParser:
 
     paths = get_project_paths()
     parser = argparse.ArgumentParser(description="Extract Xeno-canto recording IDs from saved API JSON files.")
-    parser.add_argument("--input", default=str(paths.xeno_canto_interim_dir / "api_recordings_manifest.json"))
+    parser.add_argument("--input", default=str(paths.xeno_canto_interim_dir / "api_recordings"))
     parser.add_argument("--output-json", default=str(paths.xeno_canto_recording_map_json))
     return parser
 
@@ -694,6 +819,7 @@ def build_audio_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=str(paths.xeno_canto_raw_dir))
     parser.add_argument("--limit-per-qid", type=int, default=DEFAULT_LIMIT_PER_QID)
     parser.add_argument("--clip-seconds", type=int, default=DEFAULT_CLIP_SECONDS)
+    parser.add_argument("--max-workers", type=int, default=3)
     parser.add_argument("--sleep-seconds", type=float, default=DEFAULT_SLEEP_SECONDS)
     return parser
 
@@ -713,6 +839,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=Path(args.output_dir),
         limit_per_qid=args.limit_per_qid,
         clip_seconds=args.clip_seconds,
+        max_workers=args.max_workers,
         sleep_seconds=args.sleep_seconds,
     )
     return 0
@@ -739,7 +866,7 @@ def main_recording_map(argv: list[str] | None = None) -> int:
 
     args = build_recording_map_parser().parse_args(argv)
     build_xeno_canto_recording_map_from_api(
-        manifest_path=Path(args.input),
+        input_path=Path(args.input),
         output_json=Path(args.output_json),
     )
     return 0

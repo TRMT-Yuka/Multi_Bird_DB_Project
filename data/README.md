@@ -73,8 +73,14 @@ data/                                     # このプロジェクトで扱う全
   - graph の GraphSAGE 埋め込みです
 - `external/embeddings/graph/transe/<MMDDhhmm>/`
   - graph の TransE 埋め込みです
-- `external/embeddings/audio/<model>/<MMDDhhmm>/`
-  - 音声ファイルから作る wav2vec2 系の埋め込みです
+- `external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/`
+  - 音声ファイルから作る埋め込みです
+- `external/embeddings/audio/birdnet/<model>/<MMDDhhmm>/`
+  - BirdNET の 3 秒窓埋め込みです
+- `external/embeddings/audio/perch/<model>/<MMDDhhmm>/`
+  - Perch2 の 5 秒窓埋め込みです
+- `external/embeddings/audio/wav2vec2/<model>/<MMDDhhmm>/`
+  - wav2vec2 の file 単位埋め込みです
 - `external/embeddings/graph/evaluation/`
   - graph 埋め込みのクラスタリング評価結果・レポートです
 - `external/sqlite/taxonomy/bird_taxonomy.sqlite`
@@ -191,3 +197,4 @@ graph metadata:
 - `interim/xeno-canto/recording_map.json` は API 応答から再生成できる中間成果物として扱う
 - `raw/xeno-canto/` は Xeno-canto から取得した生音声の置き場として扱う
 - `processed/` は下流利用の成果物を置く
+- 音声埋め込みは `external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` に保存する

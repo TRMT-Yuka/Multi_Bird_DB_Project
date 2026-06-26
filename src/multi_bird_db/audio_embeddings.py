@@ -30,6 +30,8 @@ DEFAULT_BIRDNET_SAMPLE_RATE = 48000
 DEFAULT_BIRDNET_MODEL_TYPE = "acoustic"
 DEFAULT_BIRDNET_MODEL_VERSION = "2.4"
 DEFAULT_BIRDNET_BACKEND = "tf"
+DEFAULT_PERCH_MODEL_NAME = "perch2"
+DEFAULT_PERCH_MODEL_TYPE = "Perch2"
 DEFAULT_EXTENSIONS = ("mp3", "wav", "flac", "ogg", "m4a")
 DEFAULT_CACHE_DIR = Path("/tmp") / "multi_bird_db_audio_cache"
 SAFE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -308,6 +310,28 @@ def _waveform_to_wav_bytes(waveform: "torch.Tensor", sample_rate: int) -> bytes:
                 pass
 
 
+def _coerce_embedding_matrix(encoded: Any, expected_rows: int) -> np.ndarray:
+    """Normalize model output to a 2D float32 matrix. / モデル出力を 2D float32 行列に揃える。"""
+
+    if hasattr(encoded, "to_numpy"):
+        encoded = encoded.to_numpy()
+    elif hasattr(encoded, "values") and not isinstance(encoded, np.ndarray):
+        encoded = encoded.values
+    matrix = np.asarray(encoded, dtype=np.float32)
+    if matrix.ndim == 0:
+        matrix = matrix.reshape(1, 1)
+    elif matrix.ndim == 1:
+        if expected_rows == 1:
+            matrix = matrix.reshape(1, -1)
+        else:
+            matrix = matrix.reshape(expected_rows, -1)
+    elif matrix.ndim > 2:
+        matrix = matrix.reshape(matrix.shape[0], -1)
+    if matrix.shape[0] != expected_rows:
+        raise ValueError(f"Encoder returned {matrix.shape[0]} rows, expected {expected_rows}")
+    return matrix.astype(np.float32, copy=False)
+
+
 class Wav2Vec2AudioEncoder:
     """Encode waveforms using a Hugging Face wav2vec2 model. / Hugging Face の wav2vec2 で埋め込む。"""
 
@@ -372,8 +396,6 @@ class BirdNETAudioEncoder:
         self.model = birdnet.load(model_type, model_version, backend)
 
     def _encode_one(self, waveform: "torch.Tensor") -> np.ndarray:
-        import numpy as np
-
         wav_bytes = _waveform_to_wav_bytes(waveform, self.sample_rate)
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
             temp_path = Path(handle.name)
@@ -386,14 +408,8 @@ class BirdNETAudioEncoder:
                     temp_path.unlink()
                 except FileNotFoundError:
                     pass
-        if hasattr(encoded, "to_numpy"):
-            encoded = encoded.to_numpy()
-        elif hasattr(encoded, "values") and not isinstance(encoded, np.ndarray):
-            encoded = encoded.values
-        encoded_array = np.asarray(encoded, dtype=np.float32)
-        if encoded_array.ndim == 0:
-            encoded_array = encoded_array.reshape(1)
-        return encoded_array
+        encoded_array = _coerce_embedding_matrix(encoded, expected_rows=1)
+        return encoded_array.reshape(-1)
 
     def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
         embeddings: list[np.ndarray] = []
@@ -403,6 +419,54 @@ class BirdNETAudioEncoder:
                 embedding = embedding.reshape(-1)
             embeddings.append(embedding)
         return np.stack(embeddings, axis=0).astype(np.float32, copy=False)
+
+
+class PerchAudioEncoder:
+    """Encode 5-second windows with Perch2 from Bioacoustics Model Zoo. / Bioacoustics Model Zoo の Perch2 で 5 秒窓を埋め込む。"""
+
+    def __init__(
+        self,
+        model_name: str = DEFAULT_PERCH_MODEL_NAME,
+        device: str = "cpu",
+        model: Any | None = None,
+    ):
+        self.model_name = model_name
+        self.model_type = DEFAULT_PERCH_MODEL_TYPE
+        self.model_version = ""
+        self.backend = "bioacoustics-model-zoo"
+        self.device = device
+        self.sample_rate = 22050
+        if model is not None:
+            self.model = model
+            return
+        try:
+            import bioacoustics_model_zoo as bmz
+        except Exception as exc:  # pragma: no cover - optional dependency guard
+            raise RuntimeError(
+                "Perch backend requires the `bioacoustics-model-zoo` Python package. Install the audio-perch extra and retry."
+            ) from exc
+
+        if hasattr(bmz, self.model_type):
+            self.model = getattr(bmz, self.model_type)()
+        else:  # pragma: no cover - future-proof fallback
+            raise RuntimeError(f"bioacoustics-model-zoo does not expose a {self.model_type} model.")
+
+    def _call_model(self, audio_paths: list[str]) -> Any:
+        if hasattr(self.model, "embed"):
+            return self.model.embed(audio_paths)
+        if hasattr(self.model, "generate_embeddings"):
+            return self.model.generate_embeddings(audio_paths)
+        raise RuntimeError("Perch model does not expose embed() or generate_embeddings().")
+
+    def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
+        with tempfile.TemporaryDirectory(prefix="perch_embed_") as tmpdir:
+            temp_paths: list[str] = []
+            for index, waveform in enumerate(waveforms):
+                temp_path = Path(tmpdir) / f"window_{index:04d}.wav"
+                temp_path.write_bytes(_waveform_to_wav_bytes(waveform, self.sample_rate))
+                temp_paths.append(str(temp_path))
+            encoded = self._call_model(temp_paths)
+        return _coerce_embedding_matrix(encoded, expected_rows=len(waveforms))
 
 
 def build_audio_embeddings(
@@ -437,18 +501,35 @@ def build_audio_embeddings(
             model_name = "birdnet-acoustic-2.4-tf"
         if encoder is None:
             encoder = BirdNETAudioEncoder(device=device)
+    elif backend == "perch":
+        if model_name == DEFAULT_MODEL_NAME:
+            model_name = DEFAULT_PERCH_MODEL_NAME
+        if encoder is None:
+            encoder = PerchAudioEncoder(device=device)
     else:
         raise NotImplementedError(
             f"Backend '{backend}' is registered with the contract ({backend_spec.window_seconds}s windows, "
             f"scope={backend_spec.embedding_scope}), but the encoder implementation is not wired yet."
         )
 
-    model_sample_rate = int(getattr(encoder, "sample_rate", DEFAULT_TARGET_SAMPLE_RATE))
-    decode_sample_rate = int(target_sample_rate or model_sample_rate)
-    if decode_sample_rate != model_sample_rate:
-        raise ValueError(
-            f"target_sample_rate ({decode_sample_rate}) must match the encoder sample rate ({model_sample_rate}) for {backend}."
-        )
+    model_sample_rate = int(getattr(encoder, "sample_rate", backend_spec.sample_rate_hz or DEFAULT_TARGET_SAMPLE_RATE))
+    if backend_spec.sample_rate_hz is not None:
+        if target_sample_rate == DEFAULT_TARGET_SAMPLE_RATE:
+            decode_sample_rate = int(backend_spec.sample_rate_hz)
+        elif target_sample_rate is None:
+            decode_sample_rate = int(backend_spec.sample_rate_hz)
+        else:
+            decode_sample_rate = int(target_sample_rate)
+        if decode_sample_rate != model_sample_rate:
+            raise ValueError(
+                f"target_sample_rate ({decode_sample_rate}) must match the encoder sample rate ({model_sample_rate}) for {backend}."
+            )
+    else:
+        decode_sample_rate = int(target_sample_rate or model_sample_rate)
+        if decode_sample_rate != model_sample_rate:
+            raise ValueError(
+                f"target_sample_rate ({decode_sample_rate}) must match the encoder sample rate ({model_sample_rate}) for {backend}."
+            )
 
     run_dir = output_dir / _safe_component(backend) / _safe_component(model_name) / _timestamp_mmddhhmm()
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -568,6 +649,7 @@ def build_audio_embeddings(
             "backend_required_system_packages": list(backend_spec.required_system_packages),
             "backend_window_seconds": backend_spec.window_seconds,
             "backend_overlap_seconds": backend_spec.overlap_seconds,
+            "backend_sample_rate_hz": backend_spec.sample_rate_hz,
             "backend_embedding_scope": backend_spec.embedding_scope,
             "input_dir": str(input_dir),
             "output_root": str(output_dir),
@@ -579,6 +661,9 @@ def build_audio_embeddings(
             "target_sample_rate": decode_sample_rate,
             "window_seconds": backend_spec.window_seconds,
             "overlap_seconds": backend_spec.overlap_seconds,
+            "encoder_model_type": getattr(encoder, "model_type", ""),
+            "encoder_model_version": getattr(encoder, "model_version", ""),
+            "encoder_backend_variant": getattr(encoder, "backend", ""),
             "embedding_dim": int(embeddings.shape[1]),
             "item_count": len(audio_ids),
             "unique_qid_count": len(set(qids)),

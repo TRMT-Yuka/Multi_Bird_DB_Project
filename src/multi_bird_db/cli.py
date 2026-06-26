@@ -101,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
             help="Extract recording IDs from saved Xeno-canto API JSON files.",
         ),
         xeno_canto_audio.build_recording_map_parser().parse_args([]),
-        ["input", "output_json", "output_tsv"],
+        ["input", "output_json"],
     )
     add_arguments(
         subparsers.add_parser(
@@ -264,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
         "extract-xeno-canto-recording-ids": (
             xeno_canto_audio.main_recording_map,
             [],
-            ["input", "output_json", "output_tsv"],
+            ["input", "output_json"],
         ),
         "fetch-xeno-canto-audio": (
             xeno_canto_audio.main,

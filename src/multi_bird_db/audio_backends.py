@@ -12,6 +12,7 @@ class AudioBackendSpec:
     window_seconds: float | None
     overlap_seconds: float | None
     embedding_scope: str
+    sample_rate_hz: int | None
     required_python_packages: tuple[str, ...]
     required_system_packages: tuple[str, ...]
     notes: str
@@ -32,6 +33,7 @@ class Wav2Vec2Backend(AudioBackend):
         window_seconds=None,
         overlap_seconds=None,
         embedding_scope="file",
+        sample_rate_hz=16000,
         required_python_packages=("torch", "torchaudio", "transformers"),
         required_system_packages=("ffmpeg",),
         notes="Whole-file encoder used as the current baseline.",
@@ -44,6 +46,7 @@ class BirdNETBackend(AudioBackend):
         window_seconds=3.0,
         overlap_seconds=0.0,
         embedding_scope="window",
+        sample_rate_hz=48000,
         required_python_packages=("birdnet", "tensorflow", "tensorflow-hub"),
         required_system_packages=("ffmpeg", "libsndfile"),
         notes="BirdNET embeddings are extracted per 3-second window.",
@@ -56,9 +59,10 @@ class PerchBackend(AudioBackend):
         window_seconds=5.0,
         overlap_seconds=0.0,
         embedding_scope="window",
-        required_python_packages=("perch-hoplite", "tensorflow", "tensorflow-hub", "jax"),
+        sample_rate_hz=22050,
+        required_python_packages=("bioacoustics-model-zoo", "tensorflow", "tensorflow-hub", "soundfile"),
         required_system_packages=("ffmpeg", "libsndfile"),
-        notes="Perch-Hoplite style embeddings are extracted per 5-second window.",
+        notes="Bioacoustics Model Zoo Perch embeddings are extracted per 5-second window.",
     )
 
 
