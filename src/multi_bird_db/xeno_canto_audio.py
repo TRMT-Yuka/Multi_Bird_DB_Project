@@ -764,7 +764,7 @@ def fetch_audio_from_recording_map(
                 with existing_audio_lock:
                     existing_audio_paths.add(relative_path)
                 return True
-            except (HTTPError, URLError):
+            except (HTTPError, URLError, subprocess.CalledProcessError, RuntimeError, OSError):
                 return False
 
         if task_specs:
