@@ -1,4 +1,5 @@
-.venv/
+.venv_BirdDB/
+.env
 __pycache__/
 *.pyc
 
@@ -30,3 +31,5 @@ conda_switch.sh
 output/
 temp/
 xeno_canto_api_key.env
+data/external/audio/
+data/external/documents/
