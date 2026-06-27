@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -138,6 +139,48 @@ class XenoCantoApiWorkflowTests(unittest.TestCase):
 
             self.assertEqual(second_download_calls, [])
             self.assertEqual(second_result["status_rows"][0]["selected_count"], 2)
+
+
+    def test_audio_download_continues_on_invalid_audio_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            recording_map_json = root / "recording_map.json"
+            recording_map_json.write_text(
+                json.dumps([
+                    {
+                        "qid": "Q1",
+                        "xeno_canto_species_id": "Species-one",
+                        "recording_ids": ["111"],
+                        "download_urls": ["https://xeno-canto.org/111/download"],
+                        "species_page_paths": [],
+                    }
+                ]),
+                encoding="utf-8",
+            )
+
+            audio_output_dir = root / "audio"
+
+            def fake_download_bytes(url: str) -> bytes:
+                return b"not-an-audio-file"
+
+            def failing_clip_audio(tmp_input: Path, local_path: Path, file_type: str, clip_seconds: int) -> None:
+                raise subprocess.CalledProcessError(183, ["ffmpeg"])
+
+            result = xeno_canto_audio.fetch_audio_from_recording_map(
+                input_path=recording_map_json,
+                output_dir=audio_output_dir,
+                limit_per_qid=10,
+                clip_seconds=15,
+                sleep_seconds=0,
+                download_bytes_fn=fake_download_bytes,
+                clip_audio_fn=failing_clip_audio,
+            )
+
+            self.assertEqual(result["downloaded_qid_count"], 0)
+            self.assertEqual(result["failed_qid_count"], 1)
+            self.assertEqual(result["failed_qids"], ["Q1"])
+            self.assertEqual(result["status_rows"][0]["status"], "no-recordings")
+            self.assertFalse((audio_output_dir / "Q1" / "111.mp3").exists())
 
 
 if __name__ == "__main__":
