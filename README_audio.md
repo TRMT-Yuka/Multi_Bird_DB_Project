@@ -158,8 +158,8 @@ PYTHONPATH=src python3 -m multi_bird_db.cli fetch-xeno-canto-audio \
   --input data/interim/xeno-canto/recording_map.json \
   --output-dir data/raw/xeno-canto \
   --limit-per-qid 20 \
-  --max-workers 3 \
-  --clip-seconds 15
+  --clip-seconds 15 \
+  --sleep-seconds 0.25
 ```
 
 各録音は `file` URL から取得し、先頭 15 秒を切り出して `data/raw/xeno-canto/<qid>/<recording_id>.<file_type>` に保存します。  
