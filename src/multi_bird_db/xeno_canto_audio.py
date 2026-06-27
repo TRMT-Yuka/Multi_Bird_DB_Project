@@ -39,6 +39,22 @@ FILE_TYPE_RE = re.compile(r"File type\s*\|\s*([A-Za-z0-9]+)")
 SAFE_PATH_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
+def resolve_ffmpeg_executable() -> str | None:
+    """Resolve an ffmpeg binary from PATH or an optional Python package."""
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+    try:
+        import imageio_ffmpeg
+    except ImportError:
+        return None
+    try:
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
+
+
 def _render_progress_line(message: str) -> None:
     """Render one in-place progress line to stderr. / stderr に進捗を 1 行表示する。"""
 
