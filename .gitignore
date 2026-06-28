@@ -24,7 +24,7 @@ docs/
 data_handling_rules.txt
 ontology.pickle
 conda_switch.sh
-
+venv_birdDB.sh
 
 
 # Legacy scratch outputs

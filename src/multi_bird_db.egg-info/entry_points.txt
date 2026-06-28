@@ -1,0 +1,2 @@
+[console_scripts]
+multi-bird-db = multi_bird_db.cli:main
