@@ -19,7 +19,8 @@
 ## Backend 契約
 
 音声埋め込み backend は共通の CLI から切り替えます。  
-現在は `wav2vec2`、`birdnet`、`perch` を実装済みです。
+現在は `wav2vec2`、`birdnet`、`perch` の backend 分岐があります。  
+この環境でまず本番利用しやすいのは `wav2vec2` です。
 
 共通ルール:
 
@@ -34,8 +35,10 @@ backend ごとの既定:
   - window: ファイル全体
   - 既定サンプルレート: 16 kHz
   - 目的: ベースライン
-  - 必要な Python 系: `torch`, `torchaudio`, `transformers`
+  - 必要な Python 系: `torch`, `transformers`
+  - 任意の Python 系: `torchaudio`
   - 必要なシステム系: `ffmpeg`
+  - モデル事前取得: `make download-audio-models`
 - `birdnet`
   - window: 3 秒
   - 既定サンプルレート: 48 kHz
@@ -53,10 +56,44 @@ backend ごとの既定:
 
 ## 音声埋め込み
 
+`wav2vec2` をこの環境で使う前提の最短手順:
+
+```bash
+source /home/trmt/Projects/Multi_Bird_DB_Project/.venv_BirdDB/bin/activate
+python -m pip install -e '.[audio-wav2vec2]'
+make download-audio-models
+make build-audio-embeddings-wav2vec2
+```
+
+モデルだけ先に取得したい場合:
+
+```bash
+source /home/trmt/Projects/Multi_Bird_DB_Project/.venv_BirdDB/bin/activate
+make download-audio-models
+```
+
+直接 CLI を叩く場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli download-audio-models \
+  --backend wav2vec2 \
+  --model-name facebook/wav2vec2-base-960h \
+  --device auto \
+  --cache-dir data/external/models/audio/huggingface
+```
+
+`wav2vec2` のモデルは既定で `data/external/models/audio/huggingface` に保存されます。  
+以後は同じ cache を使って再利用します。
+
+注意:
+
+- この環境では `torchaudio` を前提にせず、音声 decode に `ffmpeg` フォールバックを使うことがあります
+- `build-audio-embeddings-wav2vec2` の前に、`PATH` を通して `ffmpeg` コマンドを実行可能にしておく必要があります
+
 BirdNET を使う例:
 
 ```bash
-make build-audio-embeddings
+make build-audio-embeddings-birdnet
 ```
 
 直接 CLI を叩く場合:
@@ -76,6 +113,12 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
 
 Perch を使う例:
+
+```bash
+make build-audio-embeddings-perch
+```
+
+直接 CLI を叩く場合:
 
 ```bash
 PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \

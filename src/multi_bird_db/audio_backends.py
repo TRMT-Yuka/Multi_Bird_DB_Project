@@ -34,9 +34,9 @@ class Wav2Vec2Backend(AudioBackend):
         overlap_seconds=None,
         embedding_scope="file",
         sample_rate_hz=16000,
-        required_python_packages=("torch", "torchaudio", "transformers"),
+        required_python_packages=("torch", "transformers"),
         required_system_packages=("ffmpeg",),
-        notes="Whole-file encoder used as the current baseline.",
+        notes="Whole-file encoder used as the current baseline; ffmpeg decoding works without torchaudio.",
     )
 
 

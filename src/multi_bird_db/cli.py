@@ -131,6 +131,14 @@ def build_parser() -> argparse.ArgumentParser:
         ],
     )
     add_arguments(
+        subparsers.add_parser(
+            "download-audio-models",
+            help="Download and cache audio embedding model assets.",
+        ),
+        audio_embeddings.build_download_parser().parse_args([]),
+        ["backend", "model_name", "device", "cache_dir"],
+    )
+    add_arguments(
         subparsers.add_parser("build-graph", help="Build taxonomy graph PKL from ontology PKL."),
         graph.build_parser().parse_args([]),
         ["input", "output", "root_qid"],
@@ -272,13 +280,13 @@ def main(argv: list[str] | None = None) -> int:
             ["input", "output_dir", "limit_per_qid", "clip_seconds", "sleep_seconds"],
         ),
         "build-audio-embeddings": (
-                audio_embeddings.main,
-                [],
-                [
-                    "backend",
-                    "input_dir",
-                    "output_dir",
-                    "model_name",
+            audio_embeddings.main,
+            [],
+            [
+                "backend",
+                "input_dir",
+                "output_dir",
+                "model_name",
                 "device",
                 "batch_size",
                 "max_seconds",
@@ -286,6 +294,11 @@ def main(argv: list[str] | None = None) -> int:
                 "extensions",
                 "cache_dir",
             ],
+        ),
+        "download-audio-models": (
+            audio_embeddings.main_download,
+            [],
+            ["backend", "model_name", "device", "cache_dir"],
         ),
         "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
         "build-sqlite": (sqlite_store.main, [], ["input", "output", "root_qid"]),

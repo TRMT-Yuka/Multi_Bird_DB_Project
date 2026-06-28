@@ -233,6 +233,21 @@ def _require_torch() -> tuple[Any, Any, Any]:
     return torch, nn, F
 
 
+def _resolve_torch_device(requested_device: str, *, context: str) -> tuple[Any, str]:
+    torch_mod, _, _ = _require_torch()
+
+    normalized = str(requested_device).strip().lower()
+    if normalized == "auto":
+        if hasattr(torch_mod, "cuda") and torch_mod.cuda.is_available():
+            return torch_mod.device("cuda"), "cuda"
+        return torch_mod.device("cpu"), "cpu"
+    if normalized == "cuda":
+        if not (hasattr(torch_mod, "cuda") and torch_mod.cuda.is_available()):
+            raise RuntimeError(f"CUDA was requested for {context}, but torch.cuda.is_available() is false.")
+        return torch_mod.device("cuda"), "cuda"
+    return torch_mod.device("cpu"), "cpu"
+
+
 def _gradient_norm(parameters: Any) -> float:
     total = 0.0
     for parameter in parameters:
@@ -551,7 +566,7 @@ def _generate_node2vec_walks(
     return walks
 
 
-def _train_skipgram_negative_sampling(
+def _train_skipgram_negative_sampling_numpy(
     walks: list[list[str]],
     qids: list[str],
     dim: int,
@@ -634,6 +649,191 @@ def _train_skipgram_negative_sampling(
     return (input_vectors + output_vectors) / 2.0, trace
 
 
+def _sample_negative_indices_torch(
+    noise_probs: Any,
+    center_batch: Any,
+    context_batch: Any,
+    negative_samples: int,
+) -> Any:
+    torch_mod, _, _ = _require_torch()
+    if negative_samples <= 0 or center_batch.numel() == 0:
+        return torch_mod.empty((center_batch.shape[0], 0), dtype=torch_mod.long, device=center_batch.device)
+
+    negatives = torch_mod.multinomial(
+        noise_probs,
+        center_batch.shape[0] * negative_samples,
+        replacement=True,
+    ).reshape(center_batch.shape[0], negative_samples)
+    invalid = (negatives == center_batch.unsqueeze(1)) | (negatives == context_batch.unsqueeze(1))
+    while bool(invalid.any().item()):
+        replacement = torch_mod.multinomial(noise_probs, int(invalid.sum().item()), replacement=True)
+        negatives[invalid] = replacement
+        invalid = (negatives == center_batch.unsqueeze(1)) | (negatives == context_batch.unsqueeze(1))
+    return negatives
+
+
+def _train_skipgram_negative_sampling_torch(
+    walks: list[list[str]],
+    qids: list[str],
+    dim: int,
+    window_size: int,
+    negative_samples: int,
+    epochs: int,
+    learning_rate: float,
+    seed: int,
+    graph: nx.DiGraph,
+    device_obj: Any,
+) -> tuple[np.ndarray, list[dict[str, float]]]:
+    torch_mod, nn_mod, F_mod = _require_torch()
+    torch_mod.manual_seed(seed)
+    if hasattr(torch_mod, "cuda") and torch_mod.cuda.is_available():
+        torch_mod.cuda.manual_seed_all(seed)
+
+    rng = np.random.default_rng(seed)
+    node_to_index = {qid: index for index, qid in enumerate(qids)}
+    noise_probs = torch_mod.tensor(_node_weights(graph, qids), dtype=torch_mod.float32, device=device_obj)
+
+    input_embeddings = nn_mod.Embedding(len(qids), dim, device=device_obj)
+    output_embeddings = nn_mod.Embedding(len(qids), dim, device=device_obj)
+    with torch_mod.no_grad():
+        input_embeddings.weight.normal_(0.0, 0.1 / max(dim, 1))
+        output_embeddings.weight.zero_()
+
+    optimizer = torch_mod.optim.Adam(
+        list(input_embeddings.parameters()) + list(output_embeddings.parameters()),
+        lr=learning_rate,
+    )
+    batch_size = 1024
+    trace: list[dict[str, float]] = []
+
+    for epoch in range(epochs):
+        rng.shuffle(walks)
+        total_loss = 0.0
+        pair_count = 0
+        walk_progress_interval = max(len(walks) // 20, 1)
+        last_progress_time = time.monotonic()
+        _render_progress_line(
+            f"node2vec epoch {epoch + 1}/{epochs} | walks 0/{len(walks)} | pairs 0 | loss 0.0000"
+        )
+        for walk_index, walk in enumerate(walks, start=1):
+            walk_indices = [node_to_index[qid] for qid in walk]
+            positive_pairs: list[tuple[int, int]] = []
+            for center_pos, center_index in enumerate(walk_indices):
+                left = max(0, center_pos - window_size)
+                right = min(len(walk_indices), center_pos + window_size + 1)
+                for context_pos in range(left, right):
+                    if context_pos == center_pos:
+                        continue
+                    positive_pairs.append((center_index, walk_indices[context_pos]))
+
+            pair_count += len(positive_pairs)
+            for batch_start in range(0, len(positive_pairs), batch_size):
+                batch_pairs = positive_pairs[batch_start : batch_start + batch_size]
+                center_batch = torch_mod.tensor(
+                    [center_index for center_index, _ in batch_pairs],
+                    dtype=torch_mod.long,
+                    device=device_obj,
+                )
+                context_batch = torch_mod.tensor(
+                    [context_index for _, context_index in batch_pairs],
+                    dtype=torch_mod.long,
+                    device=device_obj,
+                )
+                negative_batch = _sample_negative_indices_torch(
+                    noise_probs=noise_probs,
+                    center_batch=center_batch,
+                    context_batch=context_batch,
+                    negative_samples=negative_samples,
+                )
+
+                center_vectors = input_embeddings(center_batch)
+                context_vectors = output_embeddings(context_batch)
+                pos_scores = torch_mod.sum(center_vectors * context_vectors, dim=1)
+                pos_loss = F_mod.softplus(-pos_scores).sum()
+
+                if negative_batch.numel():
+                    negative_vectors = output_embeddings(negative_batch)
+                    neg_scores = torch_mod.sum(negative_vectors * center_vectors.unsqueeze(1), dim=2)
+                    neg_loss = F_mod.softplus(neg_scores).sum()
+                else:
+                    neg_loss = torch_mod.tensor(0.0, dtype=torch_mod.float32, device=device_obj)
+
+                batch_loss = pos_loss + neg_loss
+                optimizer.zero_grad()
+                (batch_loss / max(center_batch.shape[0], 1)).backward()
+                optimizer.step()
+                total_loss += float(batch_loss.detach().cpu().item())
+
+            now = time.monotonic()
+            if walk_index % walk_progress_interval == 0 or now - last_progress_time >= 2.0:
+                _render_progress_line(
+                    f"node2vec epoch {epoch + 1}/{epochs} | walks {walk_index}/{len(walks)} | "
+                    f"pairs {pair_count} | loss {total_loss:.4f}"
+                )
+                last_progress_time = now
+
+        trace.append(
+            {
+                "epoch": float(epoch + 1),
+                "pair_count": float(pair_count),
+                "average_loss": float(total_loss / max(pair_count, 1)),
+            }
+        )
+        _finish_progress_line(
+            f"node2vec epoch {epoch + 1}/{epochs} done | walks {len(walks)}/{len(walks)} | "
+            f"pairs {pair_count} | loss {total_loss:.4f}"
+        )
+
+    with torch_mod.no_grad():
+        embeddings = (input_embeddings.weight + output_embeddings.weight) / 2.0
+    return embeddings.detach().cpu().numpy().astype(np.float32), trace
+
+
+def _train_skipgram_negative_sampling(
+    walks: list[list[str]],
+    qids: list[str],
+    dim: int,
+    window_size: int,
+    negative_samples: int,
+    epochs: int,
+    learning_rate: float,
+    seed: int,
+    graph: nx.DiGraph,
+    device: str,
+) -> tuple[np.ndarray, list[dict[str, float]], str]:
+    normalized = str(device).strip().lower()
+    if torch is None:
+        if normalized == "cuda":
+            raise RuntimeError("CUDA was requested for node2vec, but PyTorch is not installed.")
+        embeddings, trace = _train_skipgram_negative_sampling_numpy(
+            walks=walks,
+            qids=qids,
+            dim=dim,
+            window_size=window_size,
+            negative_samples=negative_samples,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            seed=seed,
+            graph=graph,
+        )
+        return embeddings, trace, "cpu"
+
+    device_obj, resolved_device = _resolve_torch_device(device, context="node2vec")
+    embeddings, trace = _train_skipgram_negative_sampling_torch(
+        walks=walks,
+        qids=qids,
+        dim=dim,
+        window_size=window_size,
+        negative_samples=negative_samples,
+        epochs=epochs,
+        learning_rate=learning_rate,
+        seed=seed,
+        graph=graph,
+        device_obj=device_obj,
+    )
+    return embeddings, trace, resolved_device
+
+
 def build_node2vec_embeddings(
     graph: nx.DiGraph,
     dim: int = 128,
@@ -647,6 +847,7 @@ def build_node2vec_embeddings(
     q: float = 1.0,
     seed: int = 42,
     undirected: bool = False,
+    device: str = "auto",
 ) -> EmbeddingStore:
     """Train a node2vec-style embedding using walk-based skip-gram. / node2vec 風の walk ベース埋め込みを学習する。"""
 
@@ -661,7 +862,7 @@ def build_node2vec_embeddings(
         q=q,
         seed=seed,
     )
-    embeddings, trace = _train_skipgram_negative_sampling(
+    embeddings, trace, resolved_device = _train_skipgram_negative_sampling(
         walks=walks,
         qids=qids,
         dim=dim,
@@ -671,6 +872,7 @@ def build_node2vec_embeddings(
         learning_rate=learning_rate,
         seed=seed,
         graph=graph,
+        device=device,
     )
 
     metadata = {
@@ -690,6 +892,8 @@ def build_node2vec_embeddings(
             "q": q,
             "seed": seed,
             "undirected": undirected,
+            "device": device,
+            "resolved_device": resolved_device,
         },
         "training_trace": trace,
     }
@@ -1159,7 +1363,7 @@ def build_grace_embeddings(
     seed: int = 42,
     root_qid: str | None = None,
     undirected: bool = False,
-    device: str = "cpu",
+    device: str = "auto",
 ) -> EmbeddingStore:
     """Train a GRACE-style contrastive embedding. / GRACE 風 contrastive 埋め込みを学習する。"""
 
@@ -1174,6 +1378,7 @@ def build_grace_embeddings(
     ]
     features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim)
     projector_dim = int(proj_dim if proj_dim is not None else dim)
+    device_obj, resolved_device = _resolve_torch_device(device, context="grace")
 
     if not qids:
         empty = np.zeros((0, dim), dtype=np.float32)
@@ -1207,18 +1412,12 @@ def build_grace_embeddings(
                     "root_qid": root_qid,
                     "undirected": undirected,
                     "device": device,
+                    "resolved_device": resolved_device,
                 },
                 "training_trace": [],
             },
         )
 
-    requested_device = str(device).strip().lower()
-    if requested_device == "cuda":
-        if not (hasattr(torch_mod, "cuda") and torch_mod.cuda.is_available()):
-            raise RuntimeError("CUDA was requested for grace, but torch.cuda.is_available() is false.")
-        device_obj = torch_mod.device("cuda")
-    else:
-        device_obj = torch_mod.device("cpu")
     base_features = torch_mod.tensor(features, dtype=torch_mod.float32, device=device_obj)
     base_adjacency = _sparse_adjacency_from_edges(len(qids), edge_pairs, device=device_obj)
 
@@ -1648,7 +1847,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--drop-feature-rate-2", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--grace-encoder", choices=["gcn", "graphsage"], default="gcn")
-    parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--graphsage-num-neighbors-1", type=int, default=25)
     parser.add_argument("--graphsage-num-neighbors-2", type=int, default=10)
     parser.add_argument("--weight-decay", type=float, default=1e-5)
