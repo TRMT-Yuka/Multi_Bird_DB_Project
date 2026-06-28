@@ -23,6 +23,10 @@ language-bert = [
     "torch",
     "transformers",
 ]
+audio-wav2vec2 = [
+    "torch",
+    "transformers",
+]
 audio-birdnet = [
     "birdnet",
     "tensorflow",

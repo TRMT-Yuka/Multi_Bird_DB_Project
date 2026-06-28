@@ -33,7 +33,7 @@ DEFAULT_BIRDNET_BACKEND = "tf"
 DEFAULT_PERCH_MODEL_NAME = "perch2"
 DEFAULT_PERCH_MODEL_TYPE = "Perch2"
 DEFAULT_EXTENSIONS = ("mp3", "wav", "flac", "ogg", "m4a")
-DEFAULT_CACHE_DIR = Path("/tmp") / "multi_bird_db_audio_cache"
+DEFAULT_CACHE_DIR = get_project_paths().root / "data" / "external" / "models" / "audio" / "huggingface"
 SAFE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 QID_RE = re.compile(r"^Q\d+$")
 
@@ -332,19 +332,44 @@ def _coerce_embedding_matrix(encoded: Any, expected_rows: int) -> np.ndarray:
     return matrix.astype(np.float32, copy=False)
 
 
+def resolve_torch_device(requested_device: str) -> str:
+    """Resolve an audio runtime device string. / 音声 runtime の device 文字列を解決する。"""
+
+    normalized = str(requested_device).strip().lower()
+    if normalized not in {"auto", "cpu", "cuda"}:
+        raise ValueError(f"Unsupported device for audio embeddings: {requested_device}")
+    if normalized == "auto":
+        try:
+            import torch
+        except Exception:
+            return "cpu"
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            return "cuda"
+        return "cpu"
+    if normalized == "cuda":
+        try:
+            import torch
+        except Exception as exc:
+            raise RuntimeError("CUDA was requested for audio embeddings, but torch is not installed.") from exc
+        if not (hasattr(torch, "cuda") and torch.cuda.is_available()):
+            raise RuntimeError("CUDA was requested for audio embeddings, but torch.cuda.is_available() is false.")
+    return normalized
+
+
 class Wav2Vec2AudioEncoder:
     """Encode waveforms using a Hugging Face wav2vec2 model. / Hugging Face の wav2vec2 で埋め込む。"""
 
-    def __init__(self, model_name: str = DEFAULT_MODEL_NAME, device: str = "cpu", cache_dir: Path | None = None):
+    def __init__(self, model_name: str = DEFAULT_MODEL_NAME, device: str = "auto", cache_dir: Path | None = None):
         from transformers import AutoModel, AutoFeatureExtractor
 
         self.model_name = model_name
-        self.device = device
+        self.device = resolve_torch_device(device)
         self.cache_dir = cache_dir
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name, cache_dir=str(cache_dir) if cache_dir else None)
-        self.model = AutoModel.from_pretrained(model_name, cache_dir=str(cache_dir) if cache_dir else None)
+        cache_path = str(cache_dir) if cache_dir else None
+        self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_name, cache_dir=cache_path)
+        self.model = AutoModel.from_pretrained(model_name, cache_dir=cache_path)
         self.model.eval()
-        self.model.to(device)
+        self.model.to(self.device)
         self.sample_rate = int(getattr(self.feature_extractor, "sampling_rate", DEFAULT_TARGET_SAMPLE_RATE))
 
     def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
@@ -469,12 +494,43 @@ class PerchAudioEncoder:
         return _coerce_embedding_matrix(encoded, expected_rows=len(waveforms))
 
 
+def download_audio_models(
+    backend: str = "wav2vec2",
+    model_name: str = DEFAULT_MODEL_NAME,
+    cache_dir: Path | None = DEFAULT_CACHE_DIR,
+    device: str = "auto",
+) -> dict[str, Any]:
+    """Download and cache model assets needed by an audio backend. / 音声 backend に必要なモデル資産を事前取得する。"""
+
+    backend_spec = get_audio_backend_spec(backend)
+    cache_path = Path(cache_dir) if cache_dir is not None else None
+    if cache_path is not None:
+        cache_path.mkdir(parents=True, exist_ok=True)
+
+    if backend == "wav2vec2":
+        encoder = Wav2Vec2AudioEncoder(model_name=model_name, device=device, cache_dir=cache_path)
+        return {
+            "backend": backend,
+            "model_name": model_name,
+            "requested_device": device,
+            "resolved_device": encoder.device,
+            "sample_rate": encoder.sample_rate,
+            "cache_dir": str(cache_path) if cache_path is not None else "",
+            "required_python_packages": list(backend_spec.required_python_packages),
+            "required_system_packages": list(backend_spec.required_system_packages),
+        }
+
+    raise NotImplementedError(
+        f"Model predownload is currently wired only for wav2vec2. Requested backend: {backend}"
+    )
+
+
 def build_audio_embeddings(
     input_dir: Path,
     output_dir: Path,
     backend: str = "wav2vec2",
     model_name: str = DEFAULT_MODEL_NAME,
-    device: str = "cpu",
+    device: str = "auto",
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_seconds: float = DEFAULT_MAX_SECONDS,
     target_sample_rate: int | None = None,
@@ -656,6 +712,7 @@ def build_audio_embeddings(
             "run_dir": str(run_dir),
             "model_name": model_name,
             "device": device,
+            "resolved_device": getattr(encoder, "device", device),
             "batch_size": batch_size,
             "max_seconds": max_seconds,
             "target_sample_rate": decode_sample_rate,
@@ -669,7 +726,7 @@ def build_audio_embeddings(
             "unique_qid_count": len(set(qids)),
             "file_extension_whitelist": list(extensions),
             "failed_count": len(failed_rows),
-            "decoder": "torchaudio+ffmpeg",
+            "decoder": "torchaudio_or_ffmpeg",
         },
     )
     _save_audio_embedding_store(store, run_dir)
@@ -684,6 +741,7 @@ def build_audio_embeddings(
         "run_dir": str(run_dir),
         "model_name": model_name,
         "device": device,
+        "resolved_device": getattr(encoder, "device", device),
         "batch_size": batch_size,
         "max_seconds": max_seconds,
         "target_sample_rate": decode_sample_rate,
@@ -714,13 +772,38 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-dir", default=str(paths.xeno_canto_raw_dir))
     parser.add_argument("--output-dir", default=str(paths.audio_embeddings_dir))
     parser.add_argument("--model-name", default=DEFAULT_MODEL_NAME)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
     parser.add_argument("--target-sample-rate", type=int, default=DEFAULT_TARGET_SAMPLE_RATE)
     parser.add_argument("--extensions", default=",".join(DEFAULT_EXTENSIONS))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
     return parser
+
+
+def build_download_parser() -> argparse.ArgumentParser:
+    """Create the CLI parser for audio model downloads. / 音声モデル事前取得用 CLI パーサを作る。"""
+
+    parser = argparse.ArgumentParser(description="Download and cache audio embedding models.")
+    parser.add_argument("--backend", choices=[spec.name for spec in list_audio_backends()], default="wav2vec2")
+    parser.add_argument("--model-name", default=DEFAULT_MODEL_NAME)
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
+    return parser
+
+
+def main_download(argv: list[str] | None = None) -> int:
+    """Run the audio model predownload command. / 音声モデル事前取得コマンドを実行する。"""
+
+    args = build_download_parser().parse_args(argv)
+    summary = download_audio_models(
+        backend=args.backend,
+        model_name=args.model_name,
+        device=args.device,
+        cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+    )
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
