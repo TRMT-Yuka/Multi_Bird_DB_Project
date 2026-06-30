@@ -67,6 +67,23 @@ def _safe_component(value: str) -> str:
     return normalized or "item"
 
 
+def _render_progress_line(message: str) -> None:
+    import sys
+
+    sys.stderr.write(f"\r{message}")
+    sys.stderr.flush()
+
+
+def _finish_progress_line(message: str | None = None) -> None:
+    import sys
+
+    if message is not None:
+        sys.stderr.write(f"\r{message}\n")
+    else:
+        sys.stderr.write("\n")
+    sys.stderr.flush()
+
+
 def _write_json_atomic(output_path: Path, payload: Any) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
@@ -433,7 +450,13 @@ class BirdNETAudioEncoder:
                     temp_path.unlink()
                 except FileNotFoundError:
                     pass
-        encoded_array = _coerce_embedding_matrix(encoded, expected_rows=1)
+        if hasattr(encoded, "embeddings"):
+            encoded = encoded.embeddings
+        encoded_array = np.asarray(encoded, dtype=np.float32)
+        if encoded_array.ndim == 3:
+            # BirdNET returns (batch, segments, dim); for one 3-second window, pool over segments defensively.
+            encoded_array = encoded_array.mean(axis=1)
+        encoded_array = _coerce_embedding_matrix(encoded_array, expected_rows=1)
         return encoded_array.reshape(-1)
 
     def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
@@ -598,8 +621,28 @@ def build_audio_embeddings(
 
     pending_waveforms: list[torch.Tensor] = []
     pending_rows: list[dict[str, str]] = []
+    total_files = len(files)
+    processed_files = 0
+    batch_count = 0
+    last_progress_time = time.monotonic()
+
+    def report_progress(*, current_label: str = "", force: bool = False) -> None:
+        nonlocal last_progress_time
+        now = time.monotonic()
+        if not force and now - last_progress_time < 0.5:
+            return
+        item_count = len(audio_ids) + len(pending_rows)
+        label = f" | {current_label}" if current_label else ""
+        _render_progress_line(
+            f"audio-{backend} | files {processed_files}/{total_files} | items {item_count} | "
+            f"failed {len(failed_rows)} | batches {batch_count}{label}"
+        )
+        last_progress_time = now
+
+    report_progress(force=True, current_label="starting")
 
     def flush_batch() -> None:
+        nonlocal batch_count
         if not pending_waveforms:
             return
         embeddings = encoder.encode_batch(pending_waveforms)
@@ -614,8 +657,10 @@ def build_audio_embeddings(
             manifest_rows.append(row_with_index)
             audio_ids.append(row["audio_id"])
             qids.append(row["qid"])
+        batch_count += 1
         pending_waveforms.clear()
         pending_rows.clear()
+        report_progress(force=True, current_label="batch complete")
 
     for path in files:
         qid = infer_qid(path, input_dir)
@@ -638,6 +683,8 @@ def build_audio_embeddings(
                     "error": str(exc),
                 }
             )
+            processed_files += 1
+            report_progress(force=True, current_label=f"failed {path.name}")
             continue
 
         if backend_spec.window_seconds is None:
@@ -685,9 +732,15 @@ def build_audio_embeddings(
             if len(pending_waveforms) >= batch_size:
                 flush_batch()
 
+        processed_files += 1
+        report_progress(force=True, current_label=path.name)
+
     flush_batch()
 
     if not embedding_batches:
+        _finish_progress_line(
+            f"audio-{backend} done | files {processed_files}/{total_files} | items 0 | failed {len(failed_rows)} | batches {batch_count}"
+        )
         raise RuntimeError("No audio files could be embedded. Check the decoder/model setup and input files.")
 
     embeddings = np.concatenate(embedding_batches, axis=0)
@@ -732,6 +785,9 @@ def build_audio_embeddings(
     _save_audio_embedding_store(store, run_dir)
     _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
     _write_json_atomic(run_dir / "failed_items.json", failed_rows)
+    _finish_progress_line(
+        f"audio-{backend} done | files {processed_files}/{total_files} | items {len(audio_ids)} | failed {len(failed_rows)} | batches {batch_count}"
+    )
 
     summary = {
         "kind": f"audio_{backend}_embeddings",
