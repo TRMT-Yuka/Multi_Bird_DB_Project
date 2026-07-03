@@ -1226,6 +1226,10 @@ def _train_graphsage_embeddings(
                 )
                 last_progress_time = now
 
+        _render_progress_line(
+            f"graphsage epoch {epoch + 1}/{epochs} | edges {len(positive_pairs)}/{len(positive_pairs)} | "
+            f"negatives {len(negative_pairs)} | computing scores"
+        )
         pos_heads = torch_mod.tensor([head for head, _ in positive_pairs], dtype=torch_mod.long, device=adjacency.device)
         pos_tails = torch_mod.tensor([tail for _, tail in positive_pairs], dtype=torch_mod.long, device=adjacency.device)
         pos_scores = torch_mod.sum(embeddings.index_select(0, pos_heads) * embeddings.index_select(0, pos_tails), dim=1)
@@ -1242,10 +1246,18 @@ def _train_graphsage_embeddings(
             neg_loss = torch_mod.tensor(0.0, dtype=torch_mod.float32, device=adjacency.device)
             total_loss = pos_loss
 
+        _render_progress_line(
+            f"graphsage epoch {epoch + 1}/{epochs} | edges {len(positive_pairs)}/{len(positive_pairs)} | "
+            f"negatives {len(negative_pairs)} | backward"
+        )
         total_loss.backward()
         grad_norm = _gradient_norm(encoder.parameters())
         optimizer.step()
 
+        _render_progress_line(
+            f"graphsage epoch {epoch + 1}/{epochs} | edges {len(positive_pairs)}/{len(positive_pairs)} | "
+            f"negatives {len(negative_pairs)} | refreshing embeddings"
+        )
         with torch_mod.no_grad():
             encoder.eval()
             final_embeddings = encoder(_sample_neighbor_layers(neighbors, num_neighbor_layers, rng))

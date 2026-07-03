@@ -103,13 +103,20 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
   --backend birdnet \
   --input-dir data/raw/xeno-canto \
   --output-dir data/external/embeddings/audio \
-  --model-name birdnet-acoustic-2.4-tf \
-  --device cpu \
+  --device auto \
   --batch-size 8 \
   --max-seconds 30
 ```
 
-このコマンドは入力ディレクトリ配下を再帰的に走査し、BirdNET なら 3 秒窓、`48 kHz` で埋め込みを作ります。  
+GPU を明示したい場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
+  --backend birdnet \
+  --device cuda
+```
+
+このコマンドは入力ディレクトリ配下を再帰的に走査し、BirdNET なら 3 秒窓、`48 kHz` で埋め込みを作ります。`auto` では TensorFlow が GPU を認識していれば `pb` backend を選び、GPU が見えなければ CPU 用の `tf` backend を使います。  
 出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
 
 Perch を使う例:
@@ -147,7 +154,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 補足:
 
 - `wav2vec2` は file 単位のベースラインです
-- `birdnet` は 3 秒窓、`48 kHz`、`birdnet.load("acoustic", "2.4", "tf")` を使います
+- `birdnet` は 3 秒窓、`48 kHz` です。CPU 時は `birdnet.load("acoustic", "2.4", "tf")`、GPU 時は `birdnet.load("acoustic", "2.4", "pb")` を使います
 - `perch` は 5 秒窓、`22.05 kHz`、`bioacoustics-model-zoo` の `Perch2` を使います
 
 ## Xeno-canto

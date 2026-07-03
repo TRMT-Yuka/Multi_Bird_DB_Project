@@ -29,7 +29,9 @@ DEFAULT_TARGET_SAMPLE_RATE = 16000
 DEFAULT_BIRDNET_SAMPLE_RATE = 48000
 DEFAULT_BIRDNET_MODEL_TYPE = "acoustic"
 DEFAULT_BIRDNET_MODEL_VERSION = "2.4"
-DEFAULT_BIRDNET_BACKEND = "tf"
+DEFAULT_BIRDNET_BACKEND = "auto"
+DEFAULT_BIRDNET_CPU_BACKEND = "tf"
+DEFAULT_BIRDNET_GPU_BACKEND = "pb"
 DEFAULT_PERCH_MODEL_NAME = "perch2"
 DEFAULT_PERCH_MODEL_TYPE = "Perch2"
 DEFAULT_EXTENSIONS = ("mp3", "wav", "flac", "ogg", "m4a")
@@ -373,6 +375,48 @@ def resolve_torch_device(requested_device: str) -> str:
     return normalized
 
 
+def birdnet_gpu_available() -> bool:
+    """Return whether TensorFlow can see at least one GPU for BirdNET pb inference."""
+
+    try:
+        import tensorflow as tf
+    except Exception:
+        return False
+    try:
+        return bool(tf.config.list_physical_devices("GPU"))
+    except Exception:
+        return False
+
+
+def resolve_birdnet_runtime(requested_device: str, requested_backend: str = DEFAULT_BIRDNET_BACKEND) -> tuple[str, str]:
+    """Resolve the BirdNET backend and runtime device strings."""
+
+    normalized_device = str(requested_device).strip().lower()
+    if normalized_device not in {"auto", "cpu", "cuda"}:
+        raise ValueError(f"Unsupported device for BirdNET embeddings: {requested_device}")
+    normalized_backend = str(requested_backend).strip().lower()
+    if normalized_backend not in {"auto", "tf", "pb"}:
+        raise ValueError(f"Unsupported BirdNET backend: {requested_backend}")
+
+    has_gpu = birdnet_gpu_available()
+
+    if normalized_device == "cuda":
+        if normalized_backend == "tf":
+            raise RuntimeError("BirdNET backend 'tf' is CPU-only. Use backend 'pb' or leave the backend on 'auto'.")
+        if not has_gpu:
+            raise RuntimeError(
+                "CUDA was requested for BirdNET embeddings, but TensorFlow could not find a GPU."
+            )
+        return (DEFAULT_BIRDNET_GPU_BACKEND if normalized_backend == "auto" else normalized_backend, "GPU:0")
+
+    if normalized_device == "cpu":
+        return (DEFAULT_BIRDNET_CPU_BACKEND if normalized_backend == "auto" else normalized_backend, "CPU")
+
+    if has_gpu and normalized_backend != "tf":
+        return (DEFAULT_BIRDNET_GPU_BACKEND if normalized_backend == "auto" else normalized_backend, "GPU:0")
+    return (DEFAULT_BIRDNET_CPU_BACKEND if normalized_backend == "auto" else normalized_backend, "CPU")
+
+
 class Wav2Vec2AudioEncoder:
     """Encode waveforms using a Hugging Face wav2vec2 model. / Hugging Face の wav2vec2 で埋め込む。"""
 
@@ -422,6 +466,7 @@ class BirdNETAudioEncoder:
         model_version: str = DEFAULT_BIRDNET_MODEL_VERSION,
         backend: str = DEFAULT_BIRDNET_BACKEND,
         device: str = "cpu",
+        model: Any | None = None,
     ):
         try:
             import birdnet
@@ -432,41 +477,47 @@ class BirdNETAudioEncoder:
 
         self.model_type = model_type
         self.model_version = model_version
-        self.backend = backend
-        self.device = device
+        self.requested_backend = backend
+        self.requested_device = device
+        self.backend, self.runtime_device = resolve_birdnet_runtime(device, backend)
+        self.device = "cuda" if self.runtime_device.startswith("GPU") else "cpu"
         self.sample_rate = DEFAULT_BIRDNET_SAMPLE_RATE
-        self.model = birdnet.load(model_type, model_version, backend)
+        self.model = model if model is not None else birdnet.load(model_type, model_version, self.backend)
 
-    def _encode_one(self, waveform: "torch.Tensor") -> np.ndarray:
-        wav_bytes = _waveform_to_wav_bytes(waveform, self.sample_rate)
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
-            temp_path = Path(handle.name)
-        try:
-            temp_path.write_bytes(wav_bytes)
-            encoded = self.model.encode(str(temp_path))
-        finally:
-            if temp_path.exists():
-                try:
-                    temp_path.unlink()
-                except FileNotFoundError:
-                    pass
+    def _coerce_result_rows(self, encoded: Any, expected_rows: int) -> np.ndarray:
+        if hasattr(encoded, "embeddings") and hasattr(encoded, "embeddings_masked"):
+            embeddings = np.asarray(encoded.embeddings, dtype=np.float32)
+            mask = np.asarray(encoded.embeddings_masked, dtype=bool)
+            if embeddings.ndim == 3 and mask.ndim == 3:
+                rows: list[np.ndarray] = []
+                valid_mask = ~mask.all(axis=2)
+                for input_index in range(embeddings.shape[0]):
+                    valid_embeddings = embeddings[input_index][valid_mask[input_index]]
+                    if valid_embeddings.size == 0:
+                        raise RuntimeError(f"BirdNET returned no valid embeddings for input index {input_index}.")
+                    rows.append(valid_embeddings.mean(axis=0, dtype=np.float32))
+                return _coerce_embedding_matrix(np.stack(rows, axis=0), expected_rows=expected_rows)
         if hasattr(encoded, "embeddings"):
             encoded = encoded.embeddings
         encoded_array = np.asarray(encoded, dtype=np.float32)
         if encoded_array.ndim == 3:
-            # BirdNET returns (batch, segments, dim); for one 3-second window, pool over segments defensively.
             encoded_array = encoded_array.mean(axis=1)
-        encoded_array = _coerce_embedding_matrix(encoded_array, expected_rows=1)
-        return encoded_array.reshape(-1)
+        return _coerce_embedding_matrix(encoded_array, expected_rows=expected_rows)
 
     def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
-        embeddings: list[np.ndarray] = []
-        for waveform in waveforms:
-            embedding = self._encode_one(waveform)
-            if embedding.ndim > 1:
-                embedding = embedding.reshape(-1)
-            embeddings.append(embedding)
-        return np.stack(embeddings, axis=0).astype(np.float32, copy=False)
+        items = [
+            (
+                waveform.detach().cpu().numpy().reshape(-1).astype(np.float32, copy=False),
+                self.sample_rate,
+            )
+            for waveform in waveforms
+        ]
+        encoded = self.model.encode_arrays(
+            items,
+            device=self.runtime_device,
+            batch_size=max(1, len(items)),
+        )
+        return self._coerce_result_rows(encoded, expected_rows=len(items))
 
 
 class PerchAudioEncoder:
@@ -576,10 +627,10 @@ def build_audio_embeddings(
         if encoder is None:
             encoder = Wav2Vec2AudioEncoder(model_name=model_name, device=device, cache_dir=cache_dir)
     elif backend == "birdnet":
-        if model_name == DEFAULT_MODEL_NAME:
-            model_name = "birdnet-acoustic-2.4-tf"
         if encoder is None:
             encoder = BirdNETAudioEncoder(device=device)
+        if model_name == DEFAULT_MODEL_NAME:
+            model_name = f"birdnet-{encoder.model_type}-{encoder.model_version}-{encoder.backend}"
     elif backend == "perch":
         if model_name == DEFAULT_MODEL_NAME:
             model_name = DEFAULT_PERCH_MODEL_NAME

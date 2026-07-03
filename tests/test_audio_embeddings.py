@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,67 @@ from multi_bird_db import audio_embeddings
 
 
 class AudioEmbeddingTests(unittest.TestCase):
+    def test_resolve_birdnet_runtime_uses_tf_on_cpu_without_tensorflow_gpu(self) -> None:
+        with mock.patch.object(audio_embeddings, "birdnet_gpu_available", return_value=False):
+            backend, runtime_device = audio_embeddings.resolve_birdnet_runtime("auto")
+        self.assertEqual(backend, "tf")
+        self.assertEqual(runtime_device, "CPU")
+
+    def test_resolve_birdnet_runtime_uses_pb_on_gpu(self) -> None:
+        with mock.patch.object(audio_embeddings, "birdnet_gpu_available", return_value=True):
+            backend, runtime_device = audio_embeddings.resolve_birdnet_runtime("cuda")
+        self.assertEqual(backend, "pb")
+        self.assertEqual(runtime_device, "GPU:0")
+
+    def test_birdnet_encoder_extracts_one_row_per_input_from_encoding_result(self) -> None:
+        class FakeWaveform:
+            def __init__(self, values):
+                self._values = np.asarray(values, dtype=np.float32)
+
+            def detach(self):
+                return self
+
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                return self._values
+
+        class FakeEncodingResult:
+            def __init__(self):
+                self.embeddings = np.asarray(
+                    [
+                        [[1.0, 2.0], [9.0, 9.0]],
+                        [[3.0, 4.0], [5.0, 6.0]],
+                    ],
+                    dtype=np.float32,
+                )
+                self.embeddings_masked = np.asarray(
+                    [
+                        [[False, False], [True, True]],
+                        [[False, False], [False, False]],
+                    ],
+                    dtype=bool,
+                )
+
+        class FakeBirdNETModel:
+            def __init__(self):
+                self.last_device = None
+                self.last_batch_size = None
+
+            def encode_arrays(self, items, *, device, batch_size):
+                self.last_device = device
+                self.last_batch_size = batch_size
+                return FakeEncodingResult()
+
+        fake_model = FakeBirdNETModel()
+        with mock.patch.object(audio_embeddings, "birdnet_gpu_available", return_value=True):
+            encoder = audio_embeddings.BirdNETAudioEncoder(backend="auto", device="cuda", model=fake_model)
+        matrix = encoder.encode_batch([FakeWaveform([0.0, 1.0]), FakeWaveform([2.0, 3.0])])
+        np.testing.assert_allclose(matrix, np.asarray([[1.0, 2.0], [4.0, 5.0]], dtype=np.float32))
+        self.assertEqual(fake_model.last_device, "GPU:0")
+        self.assertEqual(fake_model.last_batch_size, 2)
+
     def test_discover_and_embed_audio_tree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
