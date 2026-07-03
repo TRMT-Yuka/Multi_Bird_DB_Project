@@ -179,6 +179,42 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 - `summary.json`
 - `failed_items.json`
 
+## wav2vec2 fine-tuning
+
+`data/raw/xeno-canto/` 配下の音声を使い、`Q...` ディレクトリ名を鳥類ラベルとして `wav2vec2` を教師あり fine-tuning できます。
+`recording_map.json` の `recording_ids` と音声ファイル名を対応付け、5 分割 cross-validation で `wav2vec2-model_0` から `wav2vec2-model_4` を作成します。
+
+実行コマンド:
+
+```bash
+source .venv_BirdDB/bin/activate
+make finetune-wav2vec2-crossval
+```
+
+直接 CLI を叩く場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval \
+  --input-dir data/raw/xeno-canto \
+  --recording-map data/interim/xeno-canto/recording_map.json \
+  --output-dir data/external/models/audio/wav2vec2-finetuned \
+  --model-name facebook/wav2vec2-base-960h \
+  --device cuda \
+  --num-folds 5 \
+  --num-epochs 3
+```
+
+出力先:
+
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_0/`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_1/`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_2/`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_3/`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_4/`
+
+各 fold には `train_manifest.tsv`、`test_manifest.tsv`、`summary.json`、`loss_curve.png`、`accuracy_curve.png` を保存します。
+1 件しか音声がない `QID` は、その fold だけ訓練不能になるのを避けるため、全 fold で train-only として扱います。
+
 補足:
 
 - `wav2vec2` は file 単位のベースラインです

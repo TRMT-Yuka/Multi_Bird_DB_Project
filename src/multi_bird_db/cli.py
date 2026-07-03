@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from . import (
     audio_embeddings,
+    audio_finetuning,
     dump_extract,
     embeddings,
     graph,
@@ -137,6 +138,31 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         audio_embeddings.build_download_parser().parse_args([]),
         ["backend", "model_name", "device", "cache_dir"],
+    )
+    add_arguments(
+        subparsers.add_parser(
+            "finetune-wav2vec2-crossval",
+            help="Fine-tune wav2vec2 audio classifiers across cross-validation folds.",
+        ),
+        audio_finetuning.build_parser().parse_args([]),
+        [
+            "input_dir",
+            "recording_map",
+            "output_dir",
+            "model_name",
+            "cache_dir",
+            "device",
+            "num_folds",
+            "num_epochs",
+            "batch_size",
+            "eval_batch_size",
+            "learning_rate",
+            "weight_decay",
+            "max_seconds",
+            "freeze_feature_encoder",
+            "extensions",
+            "seed",
+        ],
     )
     add_arguments(
         subparsers.add_parser("build-graph", help="Build taxonomy graph PKL from ontology PKL."),
@@ -299,6 +325,28 @@ def main(argv: list[str] | None = None) -> int:
             audio_embeddings.main_download,
             [],
             ["backend", "model_name", "device", "cache_dir"],
+        ),
+        "finetune-wav2vec2-crossval": (
+            audio_finetuning.main,
+            [],
+            [
+                "input_dir",
+                "recording_map",
+                "output_dir",
+                "model_name",
+                "cache_dir",
+                "device",
+                "num_folds",
+                "num_epochs",
+                "batch_size",
+                "eval_batch_size",
+                "learning_rate",
+                "weight_decay",
+                "max_seconds",
+                "freeze_feature_encoder",
+                "extensions",
+                "seed",
+            ],
         ),
         "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
         "build-sqlite": (sqlite_store.main, [], ["input", "output", "root_qid"]),
