@@ -164,7 +164,7 @@ make build-embeddings
 - `grace`
   - 既定値: `dim=128`, `proj_dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `tau=0.5`, `drop_edge_rate_1=0.2`, `drop_edge_rate_2=0.4`, `drop_feature_rate_1=0.0`, `drop_feature_rate_2=0.0`, `batch_size=256`, `encoder_type=gcn`, `feature_mode=degree`, `weight_decay=1e-5`, `device=cpu`, `seed=42`, `root_qid=None`, `undirected=False`
 - `graphsage`
-  - 既定値: `dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `negative_samples=5`, `num_neighbors=[25,10]`, `feature_mode=degree`, `seed=42`, `root_qid=None`, `undirected=False`
+  - `make build-graphsage-embeddings` の既定値: `dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `negative_samples=1`, `num_neighbors=[8,4]`, `feature_mode=degree`, `device=cuda`, `seed=42`, `root_qid=None`, `undirected=False`
 - `transe`
   - 既定値: `dim=128`, `epochs=200`, `learning_rate=0.001`, `margin=1.0`, `negative_samples=10`, `p_norm=1`, `weight_decay=1e-5`, `seed=42`, `root_qid=None`
   - `p_norm=1` なので L1 距離版として扱う

@@ -268,6 +268,7 @@ def _build_torch_graph_data(
     graph: nx.DiGraph,
     qids: list[str],
     undirected: bool = True,
+    device: Any | None = None,
 ) -> tuple[dict[str, int], list[list[int]], Any, set[tuple[int, int]], Any]:
     torch_mod, _, _ = _require_torch()
 
@@ -300,22 +301,26 @@ def _build_torch_graph_data(
 
     neighbors = [sorted(set(items)) for items in neighbors]
     if rows:
-        row_tensor = torch_mod.tensor(rows, dtype=torch.long)
-        col_tensor = torch_mod.tensor(cols, dtype=torch.long)
-        values = torch_mod.ones(len(rows), dtype=torch.float32)
+        row_tensor = torch_mod.tensor(rows, dtype=torch.long, device=device)
+        col_tensor = torch_mod.tensor(cols, dtype=torch.long, device=device)
+        values = torch_mod.ones(len(rows), dtype=torch.float32, device=device)
         degree = torch_mod.bincount(row_tensor, minlength=len(qids)).to(torch.float32).clamp_min(1.0)
         normalized_values = values / degree[row_tensor]
         adjacency = torch_mod.sparse_coo_tensor(
             torch_mod.stack([row_tensor, col_tensor]),
             normalized_values,
             size=(len(qids), len(qids)),
+            device=device,
+            check_invariants=False,
         ).coalesce()
     else:
-        degree = torch_mod.ones(len(qids), dtype=torch.float32)
+        degree = torch_mod.ones(len(qids), dtype=torch.float32, device=device)
         adjacency = torch_mod.sparse_coo_tensor(
-            torch_mod.zeros((2, 0), dtype=torch.long),
-            torch_mod.tensor([], dtype=torch.float32),
+            torch_mod.zeros((2, 0), dtype=torch.long, device=device),
+            torch_mod.tensor([], dtype=torch.float32, device=device),
             size=(len(qids), len(qids)),
+            device=device,
+            check_invariants=False,
         ).coalesce()
     return node_to_index, neighbors, adjacency, edge_set, degree
 
@@ -456,6 +461,26 @@ def _sample_neighbor_layers(
     return sampled_layers
 
 
+def _pack_sampled_neighbor_ids(neighbor_ids: list[list[int]], device: Any) -> tuple[Any, Any]:
+    """Pack variable-length neighbor ids into dense tensors for vectorized aggregation."""
+
+    torch_mod, _, _ = _require_torch()
+    node_count = len(neighbor_ids)
+    max_neighbors = max((len(ids) for ids in neighbor_ids), default=1)
+    padded = np.zeros((node_count, max_neighbors), dtype=np.int64)
+    mask = np.zeros((node_count, max_neighbors), dtype=np.float32)
+    for row_index, ids in enumerate(neighbor_ids):
+        if not ids:
+            continue
+        width = len(ids)
+        padded[row_index, :width] = ids
+        mask[row_index, :width] = 1.0
+    return (
+        torch_mod.as_tensor(padded, dtype=torch_mod.long, device=device),
+        torch_mod.as_tensor(mask, dtype=torch_mod.float32, device=device),
+    )
+
+
 def _contrastive_loss(z1: Any, z2: Any, tau: float) -> Any:
     torch_mod, _, F_mod = _require_torch()
     z1 = F_mod.normalize(z1, p=2, dim=1)
@@ -501,17 +526,13 @@ class _GraphSAGELayer((nn.Module if nn is not None else object)):
         super().__init__()
         self.linear = nn.Linear(channels * 2, channels, bias=True)
 
-    def forward(self, h: Any, neighbor_ids: list[list[int]]) -> Any:
+    def forward(self, h: Any, neighbor_index_matrix: Any, neighbor_mask: Any) -> Any:
         torch_mod, _, _ = _require_torch()
-        aggregated: list[Any] = []
-        for ids in neighbor_ids:
-            if not ids:
-                aggregated.append(h.new_zeros(h.shape[1]))
-                continue
-            neighbor_tensor = torch_mod.tensor(ids, dtype=torch_mod.long, device=h.device)
-            neighbor_vectors = h.index_select(0, neighbor_tensor)
-            aggregated.append(neighbor_vectors.mean(dim=0))
-        aggregated_tensor = torch_mod.stack(aggregated, dim=0)
+        node_count, max_neighbors = neighbor_index_matrix.shape
+        flat_neighbor_index = neighbor_index_matrix.reshape(-1)
+        neighbor_vectors = h.index_select(0, flat_neighbor_index).reshape(node_count, max_neighbors, h.shape[1])
+        weights = neighbor_mask.unsqueeze(-1)
+        aggregated_tensor = (neighbor_vectors * weights).sum(dim=1) / weights.sum(dim=1).clamp_min(1.0)
         return self.linear(torch_mod.cat([h, aggregated_tensor], dim=1))
 
 
@@ -1159,11 +1180,18 @@ def _train_graphsage_embeddings(
     feature_mode: str,
     seed: int,
     undirected: bool,
+    device_obj: Any,
 ) -> tuple[np.ndarray, list[dict[str, float]]]:
     torch_mod, nn_mod, F_mod = _require_torch()
     rng = np.random.default_rng(seed)
-    node_to_index, neighbors, adjacency, edge_set, _ = _build_torch_graph_data(graph, qids=qids, undirected=undirected)
+    node_to_index, neighbors, adjacency, edge_set, _ = _build_torch_graph_data(
+        graph,
+        qids=qids,
+        undirected=undirected,
+        device=device_obj,
+    )
     features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim)
+    feature_tensor = torch_mod.tensor(features, dtype=torch_mod.float32, device=device_obj)
     input_dim = int(features.shape[1])
     edge_pairs = [
         (node_to_index[str(source)], node_to_index[str(target)])
@@ -1182,14 +1210,14 @@ def _train_graphsage_embeddings(
             self.input = nn_mod.Linear(input_dim, dim)
             self.layers = nn_mod.ModuleList([_GraphSAGELayer(dim) for _ in range(max(layers, 1))])
 
-        def forward(self, sampled_neighbor_layers: list[list[list[int]]]) -> Any:
-            h = torch_mod.tensor(features, dtype=torch_mod.float32, device=adjacency.device)
-            h = self.input(h)
+        def forward(self, sampled_neighbor_layers: list[tuple[Any, Any]]) -> Any:
+            h = self.input(feature_tensor)
             h = F_mod.relu(h)
             h = F_mod.normalize(h, p=2, dim=1)
             for layer_index, layer in enumerate(self.layers):
                 neighbor_layer_index = min(layer_index, len(sampled_neighbor_layers) - 1)
-                aggregated = layer(h, sampled_neighbor_layers[neighbor_layer_index])
+                neighbor_index_matrix, neighbor_mask = sampled_neighbor_layers[neighbor_layer_index]
+                aggregated = layer(h, neighbor_index_matrix, neighbor_mask)
                 h = residual * h + (1.0 - residual) * aggregated
                 h = F_mod.relu(h)
                 h = F_mod.normalize(h, p=2, dim=1)
@@ -1199,12 +1227,15 @@ def _train_graphsage_embeddings(
     optimizer = torch_mod.optim.Adam(encoder.parameters(), lr=learning_rate)
     noise_probs = _node_weights(graph, qids)
     trace: list[dict[str, float]] = []
-    final_embeddings = torch_mod.tensor(features, dtype=torch_mod.float32, device=adjacency.device)
+    final_embeddings = feature_tensor.clone()
 
     for epoch in range(epochs):
         encoder.train()
         optimizer.zero_grad()
-        sampled_neighbor_layers = _sample_neighbor_layers(neighbors, num_neighbor_layers, rng)
+        sampled_neighbor_layers = [
+            _pack_sampled_neighbor_ids(layer_neighbors, adjacency.device)
+            for layer_neighbors in _sample_neighbor_layers(neighbors, num_neighbor_layers, rng)
+        ]
         embeddings = encoder(sampled_neighbor_layers)
 
         positive_pairs = edge_pairs[:]
@@ -1260,7 +1291,12 @@ def _train_graphsage_embeddings(
         )
         with torch_mod.no_grad():
             encoder.eval()
-            final_embeddings = encoder(_sample_neighbor_layers(neighbors, num_neighbor_layers, rng))
+            final_embeddings = encoder(
+                [
+                    _pack_sampled_neighbor_ids(layer_neighbors, adjacency.device)
+                    for layer_neighbors in _sample_neighbor_layers(neighbors, num_neighbor_layers, rng)
+                ]
+            )
             total_loss_value = float(total_loss.detach().cpu().item())
             pos_score_value = float(pos_scores.detach().mean().cpu().item()) if pos_scores.numel() else 0.0
             neg_score_value = float(neg_scores.detach().mean().cpu().item()) if neg_scores.numel() else 0.0
@@ -1309,10 +1345,12 @@ def build_graphsage_embeddings(
     seed: int = 42,
     root_qid: str | None = None,
     undirected: bool = False,
+    device: str = "auto",
 ) -> EmbeddingStore:
     """Train an unsupervised GraphSAGE embedding. / 自己教師あり GraphSAGE を学習する。"""
 
     qids = sorted(str(node) for node in graph.nodes())
+    device_obj, resolved_device = _resolve_torch_device(device, context="graphsage")
     embeddings, trace = _train_graphsage_embeddings(
         graph=graph,
         qids=qids,
@@ -1327,6 +1365,7 @@ def build_graphsage_embeddings(
         feature_mode=feature_mode,
         seed=seed,
         undirected=undirected,
+        device_obj=device_obj,
     )
     metadata = {
         "algorithm": "graphsage",
@@ -1348,6 +1387,8 @@ def build_graphsage_embeddings(
             "seed": seed,
             "root_qid": root_qid,
             "undirected": undirected,
+            "device": device,
+            "resolved_device": resolved_device,
         },
         "training_trace": trace,
     }
@@ -1928,11 +1969,15 @@ def main(argv: list[str] | None = None) -> int:
             graph,
             layers=args.layers,
             residual=args.residual,
+            epochs=args.epochs,
+            learning_rate=args.learning_rate,
+            negative_samples=args.negative_samples,
             num_neighbors_1=args.graphsage_num_neighbors_1,
             num_neighbors_2=args.graphsage_num_neighbors_2,
             feature_mode=args.initial_features,
             undirected=args.undirected,
             root_qid=args.root_qid,
+            device=args.device,
             **common_kwargs,
         )
         graphsage_dir = output_root / "graphsage" / run_tag

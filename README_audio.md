@@ -1,6 +1,6 @@
 # README_audio
 
-`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。
+`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はホストの `.venv_BirdDB`、BirdNET / Perch の GPU 実行は別の Docker 環境を前提に整理します。
 
 ## 概要
 
@@ -29,6 +29,14 @@
 - `audio_ids.json` と `qids.json` は行順に対応させる
 - 失敗した入力は `failed_items.json` に残す
 
+## 実行環境の整理
+
+- `wav2vec2`
+  - ホストの `.venv_BirdDB` で実行します
+- `birdnet` / `perch`
+  - CPU 実行はホスト側でも可能です
+  - GPU 実行は Docker 側の別環境を使います。詳細は [README_Docker.md](README_Docker.md) を参照してください
+
 backend ごとの既定:
 
 - `wav2vec2`
@@ -46,6 +54,7 @@ backend ごとの既定:
   - 必要な Python 系: `birdnet`, `tensorflow`, `tensorflow-hub`, `soundfile`
   - 必要なシステム系: `ffmpeg`, `libsndfile`
   - 実装状況: 実装済み
+  - GPU 実行: Docker 側を推奨
 - `perch`
   - window: 5 秒
   - 既定サンプルレート: 22.05 kHz
@@ -53,13 +62,14 @@ backend ごとの既定:
   - 必要な Python 系: `bioacoustics-model-zoo`, `tensorflow`, `tensorflow-hub`, `soundfile`
   - 必要なシステム系: `ffmpeg`, `libsndfile`
   - 実装状況: 実装済み
+  - GPU 実行: Docker 側を推奨
 
 ## 音声埋め込み
 
 `wav2vec2` をこの環境で使う前提の最短手順:
 
 ```bash
-source /home/trmt/Projects/Multi_Bird_DB_Project/.venv_BirdDB/bin/activate
+source .venv_BirdDB/bin/activate
 python -m pip install -e '.[audio-wav2vec2]'
 make download-audio-models
 make build-audio-embeddings-wav2vec2
@@ -68,7 +78,7 @@ make build-audio-embeddings-wav2vec2
 モデルだけ先に取得したい場合:
 
 ```bash
-source /home/trmt/Projects/Multi_Bird_DB_Project/.venv_BirdDB/bin/activate
+source .venv_BirdDB/bin/activate
 make download-audio-models
 ```
 
@@ -93,7 +103,16 @@ PYTHONPATH=src python3 -m multi_bird_db.cli download-audio-models \
 BirdNET を使う例:
 
 ```bash
+source .venv_BirdDB/bin/activate
 make build-audio-embeddings-birdnet
+```
+
+BirdNET を GPU で使う例:
+
+```bash
+make build-audio-gpu-image
+make check-audio-gpu-tensorflow
+make build-audio-embeddings-birdnet-gpu
 ```
 
 直接 CLI を叩く場合:
@@ -122,7 +141,16 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 Perch を使う例:
 
 ```bash
+source .venv_BirdDB/bin/activate
 make build-audio-embeddings-perch
+```
+
+Perch を GPU で使う例:
+
+```bash
+make build-audio-gpu-image
+make check-audio-gpu-tensorflow
+make build-audio-embeddings-perch-gpu
 ```
 
 直接 CLI を叩く場合:
@@ -154,6 +182,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 補足:
 
 - `wav2vec2` は file 単位のベースラインです
+- `birdnet` / `perch` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
 - `birdnet` は 3 秒窓、`48 kHz` です。CPU 時は `birdnet.load("acoustic", "2.4", "tf")`、GPU 時は `birdnet.load("acoustic", "2.4", "pb")` を使います
 - `perch` は 5 秒窓、`22.05 kHz`、`bioacoustics-model-zoo` の `Perch2` を使います
 

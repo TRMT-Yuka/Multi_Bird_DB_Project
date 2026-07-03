@@ -1,0 +1,15 @@
+.git
+.venv_BirdDB
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+data/
+docs/
+output/
+temp/
+analysis_notebooks/
+run.sh
+xeno_canto_api_key.env
+*.ipynb
