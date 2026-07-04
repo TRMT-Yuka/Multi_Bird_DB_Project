@@ -141,6 +141,30 @@ def _write_tsv_atomic(output_path: Path, rows: list[dict[str, str]], fieldnames:
                 pass
 
 
+def _write_npy_atomic(output_path: Path, array: np.ndarray) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            np.save(handle, np.asarray(array))
+            handle.flush()
+            os.fsync(handle.fileno())
+        temp_path.replace(output_path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
+
+
 def _read_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
@@ -425,12 +449,12 @@ class AudioEmbeddingStore:
             raise ValueError("audio_ids and qids must have the same length")
 
 
-def _save_audio_embedding_store(store: AudioEmbeddingStore, output_dir: Path) -> None:
+def _save_audio_embedding_store(store: AudioEmbeddingStore, output_dir: Path, *, file_suffix: str = "") -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    np.save(output_dir / "embeddings.npy", store.embeddings)
-    _write_json_atomic(output_dir / "audio_ids.json", store.audio_ids)
-    _write_json_atomic(output_dir / "qids.json", store.qids)
-    _write_json_atomic(output_dir / "metadata.json", store.metadata)
+    _write_npy_atomic(output_dir / f"embeddings{file_suffix}.npy", store.embeddings)
+    _write_json_atomic(output_dir / f"audio_ids{file_suffix}.json", store.audio_ids)
+    _write_json_atomic(output_dir / f"qids{file_suffix}.json", store.qids)
+    _write_json_atomic(output_dir / f"metadata{file_suffix}.json", store.metadata)
 
 
 def _waveform_to_wav_bytes(waveform: np.ndarray, sample_rate: int) -> bytes:
@@ -666,6 +690,58 @@ class BirdNETAudioEncoder:
         return self._coerce_result_rows(encoded, expected_rows=len(items))
 
 
+class BirdNET2AudioEncoder:
+    """Encode files with the official BirdNET file-based API. / BirdNET の公式 file-based API で埋め込む。"""
+
+    def __init__(
+        self,
+        model_type: str = DEFAULT_BIRDNET_MODEL_TYPE,
+        model_version: str = DEFAULT_BIRDNET_MODEL_VERSION,
+        backend: str = DEFAULT_BIRDNET_BACKEND,
+        device: str = "cpu",
+        model: Any | None = None,
+    ):
+        try:
+            import birdnet
+        except Exception as exc:  # pragma: no cover - optional dependency guard
+            raise RuntimeError(
+                "BirdNET_2 backend requires the `birdnet` Python package. Install the audio-birdnet extra and retry."
+            ) from exc
+
+        self.model_type = model_type
+        self.model_version = model_version
+        self.requested_backend = backend
+        self.requested_device = device
+        self.backend, self.runtime_device = resolve_birdnet_runtime(device, backend)
+        _ensure_spawn_start_method_for_birdnet_gpu(self.runtime_device)
+        self.device = "cuda" if self.runtime_device.startswith("GPU") else "cpu"
+        self.sample_rate = DEFAULT_BIRDNET_SAMPLE_RATE
+        self.model = model if model is not None else birdnet.load(model_type, model_version, self.backend)
+
+    def encode_files(self, paths: list[Path], *, max_audio_duration_min: float | None = None) -> np.ndarray:
+        if not paths:
+            dtype = [
+                ("input", "U1"),
+                ("start_time", np.float32),
+                ("end_time", np.float32),
+                ("embedding", np.float32, 0),
+            ]
+            return np.empty(0, dtype=dtype)
+        use_gpu = self.runtime_device.startswith("GPU")
+        encoded = self.model.encode(
+            [str(path) for path in paths],
+            device=self.runtime_device,
+            batch_size=1 if use_gpu else max(1, len(paths)),
+            n_workers=1 if use_gpu else None,
+            n_producers=1,
+            overlap_duration_s=0.0,
+            max_audio_duration_min=max_audio_duration_min,
+        )
+        if not hasattr(encoded, "to_structured_array"):
+            raise RuntimeError("BirdNET encode() did not return a structured result.")
+        return np.asarray(encoded.to_structured_array())
+
+
 class PerchAudioEncoder:
     """Encode 5-second windows with Perch2 from Bioacoustics Model Zoo. / Bioacoustics Model Zoo の Perch2 で 5 秒窓を埋め込む。"""
 
@@ -745,6 +821,266 @@ def download_audio_models(
     )
 
 
+def _build_audio_embeddings_birdnet2(
+    *,
+    input_dir: Path,
+    output_dir: Path,
+    model_name: str,
+    device: str,
+    batch_size: int,
+    max_seconds: float,
+    extensions: tuple[str, ...],
+    encoder: Any,
+) -> dict[str, Any]:
+    files = discover_audio_files(input_dir, extensions=extensions)
+    if not files:
+        raise FileNotFoundError(f"No audio files were found under: {input_dir}")
+
+    run_root = output_dir / "birdnet_2" / _safe_component(model_name)
+    run_dir = run_root / _timestamp_mmddhhmm()
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_rows: list[dict[str, str]] = []
+    failed_rows: list[dict[str, str]] = []
+    audio_ids: list[str] = []
+    qids: list[str] = []
+    embedding_rows: list[np.ndarray] = []
+
+    total_files = len(files)
+    processed_files = 0
+    batch_count = 0
+    reused_item_count = 0
+    new_item_count = 0
+    last_progress_time = time.monotonic()
+
+    def _build_store(*, partial: bool) -> AudioEmbeddingStore:
+        if not embedding_rows:
+            raise ValueError("Cannot build an embedding store without any embeddings.")
+        embeddings = np.stack(embedding_rows, axis=0).astype(np.float32, copy=False)
+        return AudioEmbeddingStore(
+            audio_ids=list(audio_ids),
+            qids=list(qids),
+            embeddings=embeddings,
+            metadata={
+                "kind": "audio_birdnet_2_embeddings",
+                "dataset": "xeno-canto",
+                "created_at_utc": _timestamp_utc(),
+                "backend": "birdnet_2",
+                "backend_notes": "Official BirdNET file-based encode() path.",
+                "backend_required_python_packages": ["birdnet", "tensorflow", "tensorflow-hub"],
+                "backend_required_system_packages": ["libsndfile"],
+                "backend_window_seconds": 3.0,
+                "backend_overlap_seconds": 0.0,
+                "backend_sample_rate_hz": DEFAULT_BIRDNET_SAMPLE_RATE,
+                "backend_embedding_scope": "window",
+                "input_dir": str(input_dir),
+                "output_root": str(output_dir),
+                "run_dir": str(run_dir),
+                "model_name": model_name,
+                "device": device,
+                "resolved_device": getattr(encoder, "device", device),
+                "batch_size": batch_size,
+                "max_seconds": max_seconds,
+                "target_sample_rate": DEFAULT_BIRDNET_SAMPLE_RATE,
+                "window_seconds": 3.0,
+                "overlap_seconds": 0.0,
+                "encoder_model_type": getattr(encoder, "model_type", ""),
+                "encoder_model_version": getattr(encoder, "model_version", ""),
+                "encoder_backend_variant": getattr(encoder, "backend", ""),
+                "embedding_dim": int(embeddings.shape[1]),
+                "item_count": len(audio_ids),
+                "unique_qid_count": len(set(qids)),
+                "file_extension_whitelist": list(extensions),
+                "failed_count": len(failed_rows),
+                "decoder": "birdnet_file_api",
+                "resume_existing": False,
+                "reused_item_count": reused_item_count,
+                "new_item_count": new_item_count,
+                "resume_source_run_count": 0,
+                "processed_files": processed_files,
+                "total_files": total_files,
+                "batch_count": batch_count,
+                "partial_checkpoint": partial,
+            },
+        )
+
+    def _write_partial_outputs(*, reason: str) -> None:
+        if not embedding_rows:
+            return
+        store = _build_store(partial=True)
+        _save_audio_embedding_store(store, run_dir, file_suffix=".partial")
+        _write_tsv_atomic(run_dir / "audio_manifest.partial.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
+        _write_json_atomic(run_dir / "failed_items.partial.json", failed_rows)
+        _write_json_atomic(
+            run_dir / "summary.partial.json",
+            {
+                "backend": "birdnet_2",
+                "model_name": model_name,
+                "run_dir": str(run_dir),
+                "item_count": len(audio_ids),
+                "failed_count": len(failed_rows),
+                "processed_files": processed_files,
+                "total_files": total_files,
+                "batch_count": batch_count,
+                "checkpoint_reason": reason,
+                "completed": False,
+                "embeddings_npy": str(run_dir / "embeddings.partial.npy"),
+                "audio_ids_json": str(run_dir / "audio_ids.partial.json"),
+                "qids_json": str(run_dir / "qids.partial.json"),
+                "metadata_json": str(run_dir / "metadata.partial.json"),
+                "audio_manifest_tsv": str(run_dir / "audio_manifest.partial.tsv"),
+                "failed_items_json": str(run_dir / "failed_items.partial.json"),
+            },
+        )
+
+    def report_progress(*, current_label: str = "", force: bool = False) -> None:
+        nonlocal last_progress_time
+        now = time.monotonic()
+        if not force and now - last_progress_time < 0.5:
+            return
+        label = f" | {current_label}" if current_label else ""
+        _render_progress_line(
+            f"audio-birdnet_2 | files {processed_files}/{total_files} | items {len(audio_ids)} | "
+            f"failed {len(failed_rows)} | batches {batch_count}{label}"
+        )
+        last_progress_time = now
+
+    def append_structured_rows(structured: np.ndarray, source_paths: list[Path]) -> None:
+        nonlocal new_item_count
+        counters: dict[str, int] = {str(path): 0 for path in source_paths}
+        for row in structured:
+            input_path = str(row["input"])
+            source_path = Path(input_path)
+            qid = infer_qid(source_path, input_dir)
+            base_audio_id = build_audio_id(source_path, qid, input_dir)
+            window_index_int = counters.setdefault(input_path, 0)
+            counters[input_path] = window_index_int + 1
+            start_seconds = float(row["start_time"])
+            end_seconds = float(row["end_time"])
+            window_seconds = max(end_seconds - start_seconds, 0.0)
+            relative_path = str(source_path.relative_to(input_dir)) if source_path.is_relative_to(input_dir) else str(source_path)
+            row_with_index = {
+                "audio_id": f"{base_audio_id}_w{window_index_int:04d}",
+                "qid": qid,
+                "source_path": str(source_path),
+                "relative_path": relative_path,
+                "window_index": str(window_index_int),
+                "window_start_seconds": f"{start_seconds:.6f}",
+                "window_end_seconds": f"{end_seconds:.6f}",
+                "window_seconds": f"{window_seconds:.6f}",
+                "file_type": source_path.suffix.lower().lstrip("."),
+                "sample_rate": str(DEFAULT_BIRDNET_SAMPLE_RATE),
+                "num_samples": str(int(round(window_seconds * DEFAULT_BIRDNET_SAMPLE_RATE))),
+                "duration_seconds": f"{window_seconds:.6f}",
+                "embedding_index": str(len(audio_ids)),
+            }
+            manifest_rows.append(row_with_index)
+            audio_ids.append(row_with_index["audio_id"])
+            qids.append(qid)
+            embedding_rows.append(np.asarray(row["embedding"], dtype=np.float32).copy())
+            new_item_count += 1
+
+    def process_batch(batch_paths: list[Path]) -> None:
+        nonlocal batch_count, processed_files
+        if not batch_paths:
+            return
+        max_audio_duration_min = None
+        if max_seconds > 0 and max_seconds != DEFAULT_MAX_SECONDS:
+            max_audio_duration_min = max_seconds / 60.0
+        try:
+            structured = encoder.encode_files(batch_paths, max_audio_duration_min=max_audio_duration_min)
+        except Exception as exc:
+            if len(batch_paths) > 1:
+                for path in batch_paths:
+                    process_batch([path])
+                return
+            path = batch_paths[0]
+            qid = infer_qid(path, input_dir)
+            relative_path = str(path.relative_to(input_dir)) if path.is_relative_to(input_dir) else str(path)
+            failed_rows.append(
+                {
+                    "audio_id": build_audio_id(path, qid, input_dir),
+                    "qid": qid,
+                    "source_path": str(path),
+                    "relative_path": relative_path,
+                    "error": str(exc),
+                }
+            )
+            processed_files += 1
+            report_progress(force=True, current_label=f"failed {path.name}")
+            return
+
+        append_structured_rows(structured, batch_paths)
+        batch_count += 1
+        processed_files += len(batch_paths)
+        _write_partial_outputs(reason="batch_complete")
+        report_progress(force=True, current_label=batch_paths[-1].name)
+
+    report_progress(force=True, current_label="starting")
+    pending_paths: list[Path] = []
+    for path in files:
+        pending_paths.append(path)
+        if len(pending_paths) >= max(1, batch_size):
+            process_batch(pending_paths)
+            pending_paths = []
+    process_batch(pending_paths)
+
+    if not embedding_rows:
+        _finish_progress_line(
+            f"audio-birdnet_2 done | files {processed_files}/{total_files} | items 0 | failed {len(failed_rows)} | batches {batch_count}"
+        )
+        raise RuntimeError("No audio files could be embedded. Check the BirdNET_2 setup and input files.")
+
+    store = _build_store(partial=False)
+    embeddings = store.embeddings
+    _save_audio_embedding_store(store, run_dir)
+    _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
+    _write_json_atomic(run_dir / "failed_items.json", failed_rows)
+    _finish_progress_line(
+        f"audio-birdnet_2 done | files {processed_files}/{total_files} | items {len(audio_ids)} | failed {len(failed_rows)} | batches {batch_count}"
+    )
+
+    summary = {
+        "kind": "audio_birdnet_2_embeddings",
+        "created_at_utc": store.metadata["created_at_utc"],
+        "input_dir": str(input_dir),
+        "output_root": str(output_dir),
+        "run_dir": str(run_dir),
+        "model_name": model_name,
+        "device": device,
+        "resolved_device": getattr(encoder, "device", device),
+        "batch_size": batch_size,
+        "max_seconds": max_seconds,
+        "target_sample_rate": DEFAULT_BIRDNET_SAMPLE_RATE,
+        "embedding_dim": int(embeddings.shape[1]),
+        "item_count": len(audio_ids),
+        "unique_qid_count": len(set(qids)),
+        "failed_count": len(failed_rows),
+        "successful_count": len(audio_ids),
+        "resume_existing": False,
+        "reused_item_count": 0,
+        "new_item_count": new_item_count,
+        "resume_source_run_count": 0,
+        "output_files": {
+            "embeddings_npy": str(run_dir / "embeddings.npy"),
+            "audio_ids_json": str(run_dir / "audio_ids.json"),
+            "qids_json": str(run_dir / "qids.json"),
+            "audio_manifest_tsv": str(run_dir / "audio_manifest.tsv"),
+            "metadata_json": str(run_dir / "metadata.json"),
+            "failed_items_json": str(run_dir / "failed_items.json"),
+            "partial_embeddings_npy": str(run_dir / "embeddings.partial.npy"),
+            "partial_audio_ids_json": str(run_dir / "audio_ids.partial.json"),
+            "partial_qids_json": str(run_dir / "qids.partial.json"),
+            "partial_audio_manifest_tsv": str(run_dir / "audio_manifest.partial.tsv"),
+            "partial_metadata_json": str(run_dir / "metadata.partial.json"),
+            "partial_failed_items_json": str(run_dir / "failed_items.partial.json"),
+            "partial_summary_json": str(run_dir / "summary.partial.json"),
+        },
+    }
+    _write_json_atomic(run_dir / "summary.json", summary)
+    return {"store": store, "summary": summary, "manifest_rows": manifest_rows, "failed_rows": failed_rows}
+
+
 def build_audio_embeddings(
     input_dir: Path,
     output_dir: Path,
@@ -776,6 +1112,21 @@ def build_audio_embeddings(
             encoder = BirdNETAudioEncoder(device=device)
         if model_name == DEFAULT_MODEL_NAME:
             model_name = f"birdnet-{encoder.model_type}-{encoder.model_version}-{encoder.backend}"
+    elif backend == "birdnet_2":
+        if encoder is None:
+            encoder = BirdNET2AudioEncoder(device=device)
+        if model_name == DEFAULT_MODEL_NAME:
+            model_name = f"birdnet_2-{encoder.model_type}-{encoder.model_version}-{encoder.backend}"
+        return _build_audio_embeddings_birdnet2(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            model_name=model_name,
+            device=device,
+            batch_size=batch_size,
+            max_seconds=max_seconds,
+            extensions=extensions,
+            encoder=encoder,
+        )
     elif backend == "perch":
         if model_name == DEFAULT_MODEL_NAME:
             model_name = DEFAULT_PERCH_MODEL_NAME
@@ -840,6 +1191,88 @@ def build_audio_embeddings(
     new_item_count = 0
     last_progress_time = time.monotonic()
 
+    def _build_store(*, partial: bool) -> AudioEmbeddingStore:
+        if not embedding_rows:
+            raise ValueError("Cannot build an embedding store without any embeddings.")
+        embeddings = np.stack(embedding_rows, axis=0).astype(np.float32, copy=False)
+        return AudioEmbeddingStore(
+            audio_ids=list(audio_ids),
+            qids=list(qids),
+            embeddings=embeddings,
+            metadata={
+                "kind": f"audio_{backend}_embeddings",
+                "dataset": "xeno-canto",
+                "created_at_utc": _timestamp_utc(),
+                "backend": backend,
+                "backend_notes": backend_spec.notes,
+                "backend_required_python_packages": list(backend_spec.required_python_packages),
+                "backend_required_system_packages": list(backend_spec.required_system_packages),
+                "backend_window_seconds": backend_spec.window_seconds,
+                "backend_overlap_seconds": backend_spec.overlap_seconds,
+                "backend_sample_rate_hz": backend_spec.sample_rate_hz,
+                "backend_embedding_scope": backend_spec.embedding_scope,
+                "input_dir": str(input_dir),
+                "output_root": str(output_dir),
+                "run_dir": str(run_dir),
+                "model_name": model_name,
+                "device": device,
+                "resolved_device": getattr(encoder, "device", device),
+                "batch_size": batch_size,
+                "max_seconds": max_seconds,
+                "target_sample_rate": decode_sample_rate,
+                "window_seconds": backend_spec.window_seconds,
+                "overlap_seconds": backend_spec.overlap_seconds,
+                "encoder_model_type": getattr(encoder, "model_type", ""),
+                "encoder_model_version": getattr(encoder, "model_version", ""),
+                "encoder_backend_variant": getattr(encoder, "backend", ""),
+                "embedding_dim": int(embeddings.shape[1]),
+                "item_count": len(audio_ids),
+                "unique_qid_count": len(set(qids)),
+                "file_extension_whitelist": list(extensions),
+                "failed_count": len(failed_rows),
+                "decoder": "ffmpeg_or_custom_loader",
+                "resume_existing": resume_existing,
+                "reused_item_count": reused_item_count,
+                "new_item_count": new_item_count,
+                "resume_source_run_count": resume_source_run_count,
+                "processed_files": processed_files,
+                "total_files": total_files,
+                "batch_count": batch_count,
+                "partial_checkpoint": partial,
+            },
+        )
+
+    def _write_partial_outputs(*, reason: str) -> None:
+        if not embedding_rows:
+            return
+        store = _build_store(partial=True)
+        _save_audio_embedding_store(store, run_dir, file_suffix=".partial")
+        _write_tsv_atomic(run_dir / "audio_manifest.partial.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
+        _write_json_atomic(run_dir / "failed_items.partial.json", failed_rows)
+        _write_json_atomic(
+            run_dir / "summary.partial.json",
+            {
+                "backend": backend,
+                "model_name": model_name,
+                "run_dir": str(run_dir),
+                "item_count": len(audio_ids),
+                "failed_count": len(failed_rows),
+                "processed_files": processed_files,
+                "total_files": total_files,
+                "batch_count": batch_count,
+                "reused_item_count": reused_item_count,
+                "new_item_count": new_item_count,
+                "checkpoint_reason": reason,
+                "completed": False,
+                "embeddings_npy": str(run_dir / "embeddings.partial.npy"),
+                "audio_ids_json": str(run_dir / "audio_ids.partial.json"),
+                "qids_json": str(run_dir / "qids.partial.json"),
+                "metadata_json": str(run_dir / "metadata.partial.json"),
+                "audio_manifest_tsv": str(run_dir / "audio_manifest.partial.tsv"),
+                "failed_items_json": str(run_dir / "failed_items.partial.json"),
+            },
+        )
+
     def append_reused_item(item: dict[str, Any]) -> None:
         nonlocal reused_item_count
         row_with_index = dict(item["manifest_row"])
@@ -886,6 +1319,7 @@ def build_audio_embeddings(
         batch_count += 1
         pending_waveforms.clear()
         pending_rows.clear()
+        _write_partial_outputs(reason="batch_complete")
         report_progress(force=True, current_label="batch complete")
 
     for path in files:
@@ -987,49 +1421,8 @@ def build_audio_embeddings(
         )
         raise RuntimeError("No audio files could be embedded. Check the decoder/model setup and input files.")
 
-    embeddings = np.stack(embedding_rows, axis=0).astype(np.float32, copy=False)
-    store = AudioEmbeddingStore(
-        audio_ids=audio_ids,
-        qids=qids,
-        embeddings=embeddings,
-        metadata={
-            "kind": f"audio_{backend}_embeddings",
-            "dataset": "xeno-canto",
-            "created_at_utc": _timestamp_utc(),
-            "backend": backend,
-            "backend_notes": backend_spec.notes,
-            "backend_required_python_packages": list(backend_spec.required_python_packages),
-            "backend_required_system_packages": list(backend_spec.required_system_packages),
-            "backend_window_seconds": backend_spec.window_seconds,
-            "backend_overlap_seconds": backend_spec.overlap_seconds,
-            "backend_sample_rate_hz": backend_spec.sample_rate_hz,
-            "backend_embedding_scope": backend_spec.embedding_scope,
-            "input_dir": str(input_dir),
-            "output_root": str(output_dir),
-            "run_dir": str(run_dir),
-            "model_name": model_name,
-            "device": device,
-            "resolved_device": getattr(encoder, "device", device),
-            "batch_size": batch_size,
-            "max_seconds": max_seconds,
-            "target_sample_rate": decode_sample_rate,
-            "window_seconds": backend_spec.window_seconds,
-            "overlap_seconds": backend_spec.overlap_seconds,
-            "encoder_model_type": getattr(encoder, "model_type", ""),
-            "encoder_model_version": getattr(encoder, "model_version", ""),
-            "encoder_backend_variant": getattr(encoder, "backend", ""),
-            "embedding_dim": int(embeddings.shape[1]),
-            "item_count": len(audio_ids),
-            "unique_qid_count": len(set(qids)),
-            "file_extension_whitelist": list(extensions),
-            "failed_count": len(failed_rows),
-            "decoder": "ffmpeg_or_custom_loader",
-            "resume_existing": resume_existing,
-            "reused_item_count": reused_item_count,
-            "new_item_count": new_item_count,
-            "resume_source_run_count": resume_source_run_count,
-        },
-    )
+    store = _build_store(partial=False)
+    embeddings = store.embeddings
     _save_audio_embedding_store(store, run_dir)
     _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
     _write_json_atomic(run_dir / "failed_items.json", failed_rows)
@@ -1065,6 +1458,13 @@ def build_audio_embeddings(
             "audio_manifest_tsv": str(run_dir / "audio_manifest.tsv"),
             "metadata_json": str(run_dir / "metadata.json"),
             "failed_items_json": str(run_dir / "failed_items.json"),
+            "partial_embeddings_npy": str(run_dir / "embeddings.partial.npy"),
+            "partial_audio_ids_json": str(run_dir / "audio_ids.partial.json"),
+            "partial_qids_json": str(run_dir / "qids.partial.json"),
+            "partial_audio_manifest_tsv": str(run_dir / "audio_manifest.partial.tsv"),
+            "partial_metadata_json": str(run_dir / "metadata.partial.json"),
+            "partial_failed_items_json": str(run_dir / "failed_items.partial.json"),
+            "partial_summary_json": str(run_dir / "summary.partial.json"),
         },
     }
     _write_json_atomic(run_dir / "summary.json", summary)
@@ -1075,7 +1475,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Create the CLI parser for audio embeddings. / 音声埋め込み用 CLI パーサを作る。"""
 
     paths = get_project_paths()
-    parser = argparse.ArgumentParser(description="Build wav2vec2-based audio embeddings from a directory tree.")
+    parser = argparse.ArgumentParser(description="Build audio embeddings from a directory tree.")
     parser.add_argument("--backend", choices=[spec.name for spec in list_audio_backends()], default="wav2vec2")
     parser.add_argument("--input-dir", default=str(paths.xeno_canto_raw_dir))
     parser.add_argument("--output-dir", default=str(paths.audio_embeddings_dir))

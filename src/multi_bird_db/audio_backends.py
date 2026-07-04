@@ -53,6 +53,19 @@ class BirdNETBackend(AudioBackend):
     )
 
 
+class BirdNET2Backend(AudioBackend):
+    spec = AudioBackendSpec(
+        name="birdnet_2",
+        window_seconds=3.0,
+        overlap_seconds=0.0,
+        embedding_scope="window",
+        sample_rate_hz=48000,
+        required_python_packages=("birdnet", "tensorflow", "tensorflow-hub"),
+        required_system_packages=("libsndfile",),
+        notes="Official-style BirdNET file-based embeddings with BirdNET-managed 3-second segmentation.",
+    )
+
+
 class PerchBackend(AudioBackend):
     spec = AudioBackendSpec(
         name="perch",
@@ -69,6 +82,7 @@ class PerchBackend(AudioBackend):
 BACKENDS: dict[str, type[AudioBackend]] = {
     "wav2vec2": Wav2Vec2Backend,
     "birdnet": BirdNETBackend,
+    "birdnet_2": BirdNET2Backend,
     "perch": PerchBackend,
 }
 

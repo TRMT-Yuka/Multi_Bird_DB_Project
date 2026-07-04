@@ -19,7 +19,7 @@
 ## Backend 契約
 
 音声埋め込み backend は共通の CLI から切り替えます。  
-現在は `wav2vec2`、`birdnet`、`perch` の backend 分岐があります。  
+現在は `wav2vec2`、`birdnet`、`birdnet_2`、`perch` の backend 分岐があります。  
 この環境でまず本番利用しやすいのは `wav2vec2` です。
 
 共通ルール:
@@ -28,6 +28,7 @@
 - `embeddings.npy` と `audio_manifest.tsv` の行順を揃える
 - `audio_ids.json` と `qids.json` は行順に対応させる
 - 失敗した入力は `failed_items.json` に残す
+- 長時間実行では、バッチ完了ごとに `*.partial.*` の途中経過も上書き保存する
 
 ## 実行環境の整理
 
@@ -53,6 +54,15 @@ backend ごとの既定:
   - 必要な Python 系: `birdnet`, `tensorflow`, `tensorflow-hub`, `soundfile`
   - このコード経路は `torch` 非依存です
   - 必要なシステム系: `ffmpeg`, `libsndfile`
+  - 実装状況: 実装済み
+  - GPU 実行: Docker 側を推奨
+- `birdnet_2`
+  - window: 3 秒
+  - 既定サンプルレート: 48 kHz
+  - 目的: BirdNET 公式の file-based `encode()` に寄せた実装
+  - 必要な Python 系: `birdnet`, `tensorflow`, `tensorflow-hub`, `soundfile`
+  - このコード経路は `torch` 非依存です
+  - 必要なシステム系: `libsndfile`
   - 実装状況: 実装済み
   - GPU 実行: Docker 側を推奨
 - `perch`
@@ -116,6 +126,21 @@ make build-audio-birdnet-gpu-image
 make build-audio-embeddings-birdnet-gpu
 ```
 
+BirdNET_2 を使う例:
+
+```bash
+source .venv_BirdDB/bin/activate
+make build-audio-embeddings-birdnet-2
+```
+
+BirdNET_2 を GPU で使う例:
+
+```bash
+make check-birdnet-ngc-tensorflow-gpu
+make build-audio-birdnet-gpu-image
+make build-audio-embeddings-birdnet-2-gpu
+```
+
 補足:
 
 - ホスト側から一発で実行する場合は `make build-audio-embeddings-birdnet-gpu` を使います
@@ -143,6 +168,21 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 
 このコマンドは入力ディレクトリ配下を再帰的に走査し、BirdNET なら 3 秒窓、`48 kHz` で埋め込みを作ります。`auto` では TensorFlow が GPU を認識していれば `pb` backend を選び、GPU が見えなければ CPU 用の `tf` backend を使います。  
 出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
+
+BirdNET_2 を直接 CLI で叩く場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
+  --backend birdnet_2 \
+  --input-dir data/raw/xeno-canto \
+  --output-dir data/external/embeddings/audio \
+  --device auto \
+  --batch-size 8 \
+  --max-seconds 30
+```
+
+`birdnet_2` は BirdNET 公式の file-based `encode()` にファイルパスを直接渡し、3 秒分割も BirdNET 側に任せます。  
+既存の `birdnet` backend は、このリポジトリ側で decode・resample・windowing した波形を `encode_arrays()` に渡す経路です。
 
 Perch を使う例:
 
@@ -229,7 +269,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval \
 補足:
 
 - `wav2vec2` は file 単位のベースラインです
-- `birdnet` / `perch` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
+- `birdnet` / `birdnet_2` / `perch` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
 - `birdnet` は 3 秒窓、`48 kHz` です。CPU 時は `birdnet.load("acoustic", "2.4", "tf")`、GPU 時は `birdnet.load("acoustic", "2.4", "pb")` を使います
 - `perch` は 5 秒窓、`22.05 kHz`、`bioacoustics-model-zoo` の `Perch2` を使います
 

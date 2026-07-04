@@ -157,6 +157,13 @@ class AudioEmbeddingTests(unittest.TestCase):
             self.assertTrue((run_dir / "metadata.json").exists())
             self.assertTrue((run_dir / "summary.json").exists())
             self.assertTrue((run_dir / "failed_items.json").exists())
+            self.assertTrue((run_dir / "embeddings.partial.npy").exists())
+            self.assertTrue((run_dir / "audio_ids.partial.json").exists())
+            self.assertTrue((run_dir / "qids.partial.json").exists())
+            self.assertTrue((run_dir / "metadata.partial.json").exists())
+            self.assertTrue((run_dir / "audio_manifest.partial.tsv").exists())
+            self.assertTrue((run_dir / "failed_items.partial.json").exists())
+            self.assertTrue((run_dir / "summary.partial.json").exists())
 
             embeddings = np.load(run_dir / "embeddings.npy")
             self.assertEqual(embeddings.shape, (2, 3))
@@ -239,6 +246,78 @@ class AudioEmbeddingTests(unittest.TestCase):
             self.assertEqual(manifest_rows[2]["window_index"], "0")
             self.assertEqual(result["summary"]["item_count"], 3)
             self.assertEqual(result["summary"]["failed_count"], 0)
+
+    def test_birdnet_2_backend_uses_official_file_api(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            input_dir = root / "trimmed_xeno_data"
+            qid_dir = input_dir / "Q122868"
+            qid_dir.mkdir(parents=True)
+            file_one = qid_dir / "111.mp3"
+            file_two = qid_dir / "222.mp3"
+            file_one.write_bytes(b"stub-audio-one")
+            file_two.write_bytes(b"stub-audio-two")
+
+            structured_dtype = np.dtype(
+                [
+                    ("input", "U256"),
+                    ("start_time", np.float32),
+                    ("end_time", np.float32),
+                    ("embedding", np.float32, (3,)),
+                ]
+            )
+
+            class FakeBirdNET2Encoder:
+                device = "cuda"
+                sample_rate = 48000
+                model_type = "acoustic"
+                model_version = "2.4"
+                backend = "pb"
+
+                def __init__(self):
+                    self.calls = []
+
+                def encode_files(self, paths, *, max_audio_duration_min=None):
+                    self.calls.append(([str(path) for path in paths], max_audio_duration_min))
+                    rows = np.zeros(3, dtype=structured_dtype)
+                    rows[0] = (str(file_one), 0.0, 3.0, np.asarray([1.0, 2.0, 3.0], dtype=np.float32))
+                    rows[1] = (str(file_one), 3.0, 6.0, np.asarray([4.0, 5.0, 6.0], dtype=np.float32))
+                    rows[2] = (str(file_two), 0.0, 3.0, np.asarray([7.0, 8.0, 9.0], dtype=np.float32))
+                    return rows
+
+            fake_encoder = FakeBirdNET2Encoder()
+            output_dir = root / "embeddings"
+            result = audio_embeddings.build_audio_embeddings(
+                input_dir=input_dir,
+                output_dir=output_dir,
+                backend="birdnet_2",
+                model_name="birdnet2-unit-test",
+                device="cuda",
+                batch_size=8,
+                max_seconds=30.0,
+                target_sample_rate=48000,
+                extensions=("mp3",),
+                cache_dir=None,
+                encoder=fake_encoder,
+            )
+
+            run_dir = Path(result["summary"]["run_dir"])
+            embeddings = np.load(run_dir / "embeddings.npy")
+            self.assertEqual(embeddings.shape, (3, 3))
+
+            audio_ids = json.loads((run_dir / "audio_ids.json").read_text(encoding="utf-8"))
+            self.assertEqual(audio_ids, ["Q122868_111_w0000", "Q122868_111_w0001", "Q122868_222_w0000"])
+
+            manifest_rows = result["manifest_rows"]
+            self.assertEqual(manifest_rows[0]["window_index"], "0")
+            self.assertEqual(manifest_rows[0]["window_start_seconds"], "0.000000")
+            self.assertEqual(manifest_rows[1]["window_index"], "1")
+            self.assertEqual(manifest_rows[1]["window_start_seconds"], "3.000000")
+            self.assertEqual(manifest_rows[2]["window_index"], "0")
+            self.assertEqual(result["summary"]["item_count"], 3)
+            self.assertEqual(result["summary"]["failed_count"], 0)
+            self.assertEqual(result["store"].metadata["decoder"], "birdnet_file_api")
+            self.assertEqual(fake_encoder.calls, [([str(file_one), str(file_two)], None)])
 
     def test_perch_backend_uses_five_second_windows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

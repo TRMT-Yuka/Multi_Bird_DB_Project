@@ -87,6 +87,12 @@ BirdNET 埋め込みを実行する場合:
 make build-audio-embeddings-birdnet-gpu
 ```
 
+BirdNET_2 埋め込みを実行する場合:
+
+```bash
+make build-audio-embeddings-birdnet-2-gpu
+```
+
 ## 既存の汎用 TensorFlow GPU コンテナ
 
 既存の `Dockerfile.audio-gpu` / `scripts/run_audio_gpu_container.sh` はそのまま残しています。主に Perch 側で使う想定です。
