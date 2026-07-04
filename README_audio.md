@@ -115,6 +115,11 @@ make check-audio-gpu-tensorflow
 make build-audio-embeddings-birdnet-gpu
 ```
 
+補足:
+
+- ホスト側から一発で実行する場合は `make build-audio-embeddings-birdnet-gpu` を使います
+- すでに `make run-audio-gpu-shell` でコンテナ内に入っている場合は、この `make` を重ねず、コンテナ内で `python3 -m multi_bird_db.cli ...` を直接実行してください
+
 直接 CLI を叩く場合:
 
 ```bash
@@ -152,6 +157,11 @@ make build-audio-gpu-image
 make check-audio-gpu-tensorflow
 make build-audio-embeddings-perch-gpu
 ```
+
+補足:
+
+- ホスト側から一発で実行する場合は `make build-audio-embeddings-perch-gpu` を使います
+- すでに `make run-audio-gpu-shell` でコンテナ内に入っている場合は、この `make` を重ねず、コンテナ内で `python3 -m multi_bird_db.cli ...` を直接実行してください
 
 直接 CLI を叩く場合:
 

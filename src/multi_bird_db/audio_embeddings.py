@@ -140,6 +140,128 @@ def _write_tsv_atomic(output_path: Path, rows: list[dict[str, str]], fieldnames:
                 pass
 
 
+def _read_json(path: Path) -> Any:
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _read_tsv(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle, delimiter="	"))
+
+
+def _normalize_compare_path(path: Path | str) -> str:
+    return str(Path(path).expanduser().resolve())
+
+
+def _compatible_optional_float(value: Any, expected: float | None) -> bool:
+    if expected is None:
+        return value in {None, ""}
+    try:
+        return float(value) == float(expected)
+    except (TypeError, ValueError):
+        return False
+
+
+def _resume_metadata_matches(
+    metadata: dict[str, Any],
+    *,
+    input_dir: Path,
+    backend: str,
+    model_name: str,
+    max_seconds: float,
+    target_sample_rate: int,
+    window_seconds: float | None,
+    overlap_seconds: float | None,
+    extensions: tuple[str, ...],
+) -> bool:
+    if str(metadata.get("backend") or "") != backend:
+        return False
+    if str(metadata.get("model_name") or "") != model_name:
+        return False
+    if _normalize_compare_path(metadata.get("input_dir") or "") != _normalize_compare_path(input_dir):
+        return False
+    if not _compatible_optional_float(metadata.get("max_seconds"), max_seconds):
+        return False
+    if int(metadata.get("target_sample_rate") or -1) != int(target_sample_rate):
+        return False
+    if not _compatible_optional_float(metadata.get("backend_window_seconds"), window_seconds):
+        return False
+    if not _compatible_optional_float(metadata.get("backend_overlap_seconds"), overlap_seconds):
+        return False
+    recorded_extensions = sorted(str(value).lower().lstrip(".") for value in (metadata.get("file_extension_whitelist") or []))
+    expected_extensions = sorted(str(value).lower().lstrip(".") for value in extensions)
+    return recorded_extensions == expected_extensions
+
+
+def _load_existing_audio_items(
+    run_root: Path,
+    *,
+    input_dir: Path,
+    backend: str,
+    model_name: str,
+    max_seconds: float,
+    target_sample_rate: int,
+    window_seconds: float | None,
+    overlap_seconds: float | None,
+    extensions: tuple[str, ...],
+) -> tuple[dict[str, dict[str, Any]], int]:
+    if not run_root.exists():
+        return {}, 0
+
+    existing_items: dict[str, dict[str, Any]] = {}
+    compatible_run_count = 0
+    run_dirs = sorted((child for child in run_root.iterdir() if child.is_dir()), key=lambda item: item.name)
+    for run_dir in run_dirs:
+        metadata_path = run_dir / "metadata.json"
+        manifest_path = run_dir / "audio_manifest.tsv"
+        embeddings_path = run_dir / "embeddings.npy"
+        audio_ids_path = run_dir / "audio_ids.json"
+        qids_path = run_dir / "qids.json"
+        required_paths = [metadata_path, manifest_path, embeddings_path, audio_ids_path, qids_path]
+        if not all(path.exists() for path in required_paths):
+            continue
+
+        metadata = _read_json(metadata_path)
+        if not _resume_metadata_matches(
+            metadata,
+            input_dir=input_dir,
+            backend=backend,
+            model_name=model_name,
+            max_seconds=max_seconds,
+            target_sample_rate=target_sample_rate,
+            window_seconds=window_seconds,
+            overlap_seconds=overlap_seconds,
+            extensions=extensions,
+        ):
+            continue
+
+        manifest_rows = _read_tsv(manifest_path)
+        audio_ids = list(_read_json(audio_ids_path))
+        qids = list(_read_json(qids_path))
+        embeddings = np.asarray(np.load(embeddings_path), dtype=np.float32)
+        if embeddings.ndim != 2:
+            continue
+        if len(audio_ids) != embeddings.shape[0] or len(qids) != embeddings.shape[0]:
+            continue
+
+        index_by_audio_id = {str(audio_id): index for index, audio_id in enumerate(audio_ids)}
+        compatible_run_count += 1
+        for row in manifest_rows:
+            audio_id = str(row.get("audio_id") or "")
+            index = index_by_audio_id.get(audio_id)
+            if index is None:
+                continue
+            existing_items[audio_id] = {
+                "audio_id": audio_id,
+                "qid": str(qids[index]),
+                "embedding": np.asarray(embeddings[index], dtype=np.float32).copy(),
+                "manifest_row": {column: str(row.get(column) or "") for column in MANIFEST_COLUMNS},
+                "source_run_dir": str(run_dir),
+            }
+    return existing_items, compatible_run_count
+
+
 def discover_audio_files(input_dir: Path, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> list[Path]:
     """Return a sorted list of audio files under one directory tree. / 1 つのツリー内の音声ファイルを列挙する。"""
 
@@ -612,6 +734,7 @@ def build_audio_embeddings(
     cache_dir: Path | None = DEFAULT_CACHE_DIR,
     audio_loader: Callable[[Path], tuple[Any, int]] | None = None,
     encoder: Any | None = None,
+    resume_existing: bool = False,
 ) -> dict[str, Any]:
     """Build audio embeddings for all files under one directory tree. / ディレクトリ配下の音声埋め込みを作る。"""
 
@@ -661,21 +784,49 @@ def build_audio_embeddings(
                 f"target_sample_rate ({decode_sample_rate}) must match the encoder sample rate ({model_sample_rate}) for {backend}."
             )
 
-    run_dir = output_dir / _safe_component(backend) / _safe_component(model_name) / _timestamp_mmddhhmm()
+    run_root = output_dir / _safe_component(backend) / _safe_component(model_name)
+    existing_items: dict[str, dict[str, Any]] = {}
+    resume_source_run_count = 0
+    if resume_existing:
+        existing_items, resume_source_run_count = _load_existing_audio_items(
+            run_root,
+            input_dir=input_dir,
+            backend=backend,
+            model_name=model_name,
+            max_seconds=max_seconds,
+            target_sample_rate=decode_sample_rate,
+            window_seconds=backend_spec.window_seconds,
+            overlap_seconds=backend_spec.overlap_seconds,
+            extensions=extensions,
+        )
+
+    run_dir = run_root / _timestamp_mmddhhmm()
     run_dir.mkdir(parents=True, exist_ok=True)
 
     manifest_rows: list[dict[str, str]] = []
     failed_rows: list[dict[str, str]] = []
     audio_ids: list[str] = []
     qids: list[str] = []
-    embedding_batches: list[np.ndarray] = []
+    embedding_rows: list[np.ndarray] = []
 
     pending_waveforms: list[torch.Tensor] = []
     pending_rows: list[dict[str, str]] = []
     total_files = len(files)
     processed_files = 0
     batch_count = 0
+    reused_item_count = 0
+    new_item_count = 0
     last_progress_time = time.monotonic()
+
+    def append_reused_item(item: dict[str, Any]) -> None:
+        nonlocal reused_item_count
+        row_with_index = dict(item["manifest_row"])
+        row_with_index["embedding_index"] = str(len(audio_ids))
+        manifest_rows.append(row_with_index)
+        audio_ids.append(str(item["audio_id"]))
+        qids.append(str(item["qid"]))
+        embedding_rows.append(np.asarray(item["embedding"], dtype=np.float32).copy())
+        reused_item_count += 1
 
     def report_progress(*, current_label: str = "", force: bool = False) -> None:
         nonlocal last_progress_time
@@ -686,14 +837,14 @@ def build_audio_embeddings(
         label = f" | {current_label}" if current_label else ""
         _render_progress_line(
             f"audio-{backend} | files {processed_files}/{total_files} | items {item_count} | "
-            f"failed {len(failed_rows)} | batches {batch_count}{label}"
+            f"reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
         )
         last_progress_time = now
 
     report_progress(force=True, current_label="starting")
 
     def flush_batch() -> None:
-        nonlocal batch_count
+        nonlocal batch_count, new_item_count
         if not pending_waveforms:
             return
         embeddings = encoder.encode_batch(pending_waveforms)
@@ -701,13 +852,15 @@ def build_audio_embeddings(
             raise ValueError(f"Encoder must return a 2D matrix, got shape {embeddings.shape}")
         if embeddings.shape[0] != len(pending_rows):
             raise ValueError("Encoder row count does not match the batch size")
-        embedding_batches.append(embeddings.astype(np.float32, copy=False))
-        for row in pending_rows:
+        batch_rows = embeddings.astype(np.float32, copy=False)
+        for row_index, row in enumerate(pending_rows):
             row_with_index = dict(row)
             row_with_index["embedding_index"] = str(len(audio_ids))
             manifest_rows.append(row_with_index)
             audio_ids.append(row["audio_id"])
             qids.append(row["qid"])
+            embedding_rows.append(np.asarray(batch_rows[row_index], dtype=np.float32).copy())
+            new_item_count += 1
         batch_count += 1
         pending_waveforms.clear()
         pending_rows.clear()
@@ -717,6 +870,13 @@ def build_audio_embeddings(
         qid = infer_qid(path, input_dir)
         base_audio_id = build_audio_id(path, qid, input_dir)
         relative_path = str(path.relative_to(input_dir)) if path.is_relative_to(input_dir) else str(path)
+
+        if backend_spec.window_seconds is None and base_audio_id in existing_items:
+            append_reused_item(existing_items[base_audio_id])
+            processed_files += 1
+            report_progress(force=True, current_label=f"reused {path.name}")
+            continue
+
         try:
             waveform, sample_rate = load_audio_file(
                 path,
@@ -762,6 +922,10 @@ def build_audio_embeddings(
                 window_end_seconds = f"{window.end_seconds:.6f}"
                 window_seconds = f"{float(backend_spec.window_seconds):.6f}"
 
+            if item_audio_id in existing_items:
+                append_reused_item(existing_items[item_audio_id])
+                continue
+
             duration_seconds = float(window.waveform.numel()) / float(sample_rate or decode_sample_rate)
             pending_waveforms.append(window.waveform)
             pending_rows.append(
@@ -788,13 +952,13 @@ def build_audio_embeddings(
 
     flush_batch()
 
-    if not embedding_batches:
+    if not embedding_rows:
         _finish_progress_line(
-            f"audio-{backend} done | files {processed_files}/{total_files} | items 0 | failed {len(failed_rows)} | batches {batch_count}"
+            f"audio-{backend} done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
         )
         raise RuntimeError("No audio files could be embedded. Check the decoder/model setup and input files.")
 
-    embeddings = np.concatenate(embedding_batches, axis=0)
+    embeddings = np.stack(embedding_rows, axis=0).astype(np.float32, copy=False)
     store = AudioEmbeddingStore(
         audio_ids=audio_ids,
         qids=qids,
@@ -831,13 +995,17 @@ def build_audio_embeddings(
             "file_extension_whitelist": list(extensions),
             "failed_count": len(failed_rows),
             "decoder": "torchaudio_or_ffmpeg",
+            "resume_existing": resume_existing,
+            "reused_item_count": reused_item_count,
+            "new_item_count": new_item_count,
+            "resume_source_run_count": resume_source_run_count,
         },
     )
     _save_audio_embedding_store(store, run_dir)
     _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
     _write_json_atomic(run_dir / "failed_items.json", failed_rows)
     _finish_progress_line(
-        f"audio-{backend} done | files {processed_files}/{total_files} | items {len(audio_ids)} | failed {len(failed_rows)} | batches {batch_count}"
+        f"audio-{backend} done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
     )
 
     summary = {
@@ -857,6 +1025,10 @@ def build_audio_embeddings(
         "unique_qid_count": len(set(qids)),
         "failed_count": len(failed_rows),
         "successful_count": len(audio_ids),
+        "resume_existing": resume_existing,
+        "reused_item_count": reused_item_count,
+        "new_item_count": new_item_count,
+        "resume_source_run_count": resume_source_run_count,
         "output_files": {
             "embeddings_npy": str(run_dir / "embeddings.npy"),
             "audio_ids_json": str(run_dir / "audio_ids.json"),
@@ -885,6 +1057,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-sample-rate", type=int, default=DEFAULT_TARGET_SAMPLE_RATE)
     parser.add_argument("--extensions", default=",".join(DEFAULT_EXTENSIONS))
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR))
+    parser.add_argument("--resume-existing", action="store_true")
     return parser
 
 

@@ -14,6 +14,8 @@
   - BirdNET / Perch を別の Docker GPU 環境で実行する手順です
 - [README_language.md](README_language.md)
   - 言語単位の ID と埋め込みの対応付けを整理するメモです
+- [README_retrieval.md](README_retrieval.md)
+  - 各モダリティの埋め込み種類・有無による QID 検索実験の設計です
 
 ## 現在の実装状況
 
