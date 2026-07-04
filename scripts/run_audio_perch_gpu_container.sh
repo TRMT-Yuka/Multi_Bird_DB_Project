@@ -4,17 +4,13 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 
-image_tag="${AUDIO_GPU_IMAGE_TAG:-multi-bird-db/audio-gpu:local}"
-base_image="${AUDIO_GPU_BASE_IMAGE:-nvcr.io/nvidia/tensorflow:25.02-tf2-py3-igpu}"
-dockerfile_path="${AUDIO_GPU_DOCKERFILE:-Dockerfile.audio-gpu}"
-build_mode="${AUDIO_GPU_BUILD:-auto}"
+image_tag="${AUDIO_PERCH_GPU_IMAGE_TAG:-multi-bird-db/audio-perch-gpu:local}"
+base_image="${AUDIO_PERCH_GPU_BASE_IMAGE:-nvcr.io/nvidia/tensorflow:25.02-tf2-py3}"
+dockerfile_path="${AUDIO_PERCH_GPU_DOCKERFILE:-Dockerfile.audio-perch-gpu}"
+build_mode="${AUDIO_PERCH_GPU_BUILD:-auto}"
 
 build_image() {
-  docker build \
-    --build-arg BASE_IMAGE="${base_image}" \
-    -f "${repo_root}/${dockerfile_path}" \
-    -t "${image_tag}" \
-    "${repo_root}"
+  docker build     --build-arg BASE_IMAGE="${base_image}"     -f "${repo_root}/${dockerfile_path}"     -t "${image_tag}"     "${repo_root}"
 }
 
 if [[ "${1:-}" == "--build-only" ]]; then
@@ -42,6 +38,10 @@ docker_args=(
   --ulimit stack=67108864
   --user "$(id -u):$(id -g)"
   -e HOME=/tmp
+  -e USER=trmt
+  -e LOGNAME=trmt
+  -e USERNAME=trmt
+  -e TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor
   -e PYTHONPATH=src
   -e HF_HOME=/workspace/data/external/models/audio/huggingface
   -v "${repo_root}:/workspace"

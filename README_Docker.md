@@ -1,14 +1,14 @@
 # README_Docker
 
-BirdNET と Perch の GPU 実行を、ホストの `.venv_BirdDB` とは別の Docker 環境へ分離するための手順です。
+BirdNET と旧 Perch の GPU 実行を、ホストの `.venv_BirdDB` とは別の Docker 環境へ分離するための手順です。
 
 ## 含めるもの
 
-- `Dockerfile.audio-gpu`
 - `Dockerfile.audio-birdnet-gpu`
+- `Dockerfile.audio-perch-gpu`
 - `.dockerignore`
-- `scripts/run_audio_gpu_container.sh`
 - `scripts/run_audio_birdnet_gpu_container.sh`
+- `scripts/run_audio_perch_gpu_container.sh`
 - `Makefile` の GPU 用ターゲット
 
 この構成では、リポジトリ配下のコードと手順だけを Git 管理します。モデル cache、音声データ、埋め込み結果、pull 済み image は Git に含めません。
@@ -93,14 +93,38 @@ BirdNET_2 埋め込みを実行する場合:
 make build-audio-embeddings-birdnet-2-gpu
 ```
 
-## 既存の汎用 TensorFlow GPU コンテナ
+## 旧 Perch 用 GPU コンテナ
 
-既存の `Dockerfile.audio-gpu` / `scripts/run_audio_gpu_container.sh` はそのまま残しています。主に Perch 側で使う想定です。
+旧 `Perch` 用 Dockerfile は `Dockerfile.audio-perch-gpu` です。
+
+特徴:
+
+- base image は `nvcr.io/nvidia/tensorflow:25.02-tf2-py3`
+- TensorFlow 自体は NGC 側を使い、`pip install tensorflow` はしない
+- 追加するのは `audio-perch` extra と最小限のシステム依存だけ
+- `HOME=/tmp` と `TORCHINDUCTOR_CACHE_DIR=/tmp/torchinductor` を固定し、uid 解決まわりの不安定さを避ける
+
+image を build する場合:
 
 ```bash
-make build-audio-gpu-image
-make check-audio-gpu-tensorflow
-make run-audio-gpu-shell
+make build-audio-perch-gpu-image
+```
+
+TensorFlow GPU 認識確認:
+
+```bash
+make check-audio-perch-gpu-tensorflow
+```
+
+shell に入る場合:
+
+```bash
+make run-audio-perch-gpu-shell
+```
+
+旧 Perch 埋め込みを実行する場合:
+
+```bash
 make build-audio-embeddings-perch-gpu
 ```
 

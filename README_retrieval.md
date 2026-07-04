@@ -195,9 +195,10 @@ make build-audio-embeddings-perch
 BirdNET / Perch を Docker GPU で回す場合:
 
 ```bash
-make build-audio-gpu-image
-make check-audio-gpu-tensorflow
+make build-audio-birdnet-gpu-image
 make build-audio-embeddings-birdnet-gpu
+make build-audio-perch-gpu-image
+make check-audio-perch-gpu-tensorflow
 make build-audio-embeddings-perch-gpu
 ```
 

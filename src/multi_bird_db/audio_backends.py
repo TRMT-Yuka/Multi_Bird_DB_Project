@@ -72,10 +72,10 @@ class PerchBackend(AudioBackend):
         window_seconds=5.0,
         overlap_seconds=0.0,
         embedding_scope="window",
-        sample_rate_hz=22050,
+        sample_rate_hz=32000,
         required_python_packages=("bioacoustics-model-zoo", "tensorflow", "tensorflow-hub", "soundfile"),
         required_system_packages=("ffmpeg", "libsndfile"),
-        notes="Bioacoustics Model Zoo Perch embeddings are extracted per 5-second window.",
+        notes="Legacy official Perch embeddings are extracted through the Bioacoustics Model Zoo clip DataFrame API.",
     )
 
 

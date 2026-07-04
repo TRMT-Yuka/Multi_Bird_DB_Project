@@ -33,8 +33,9 @@ DEFAULT_BIRDNET_MODEL_VERSION = "2.4"
 DEFAULT_BIRDNET_BACKEND = "auto"
 DEFAULT_BIRDNET_CPU_BACKEND = "tf"
 DEFAULT_BIRDNET_GPU_BACKEND = "pb"
-DEFAULT_PERCH_MODEL_NAME = "perch2"
-DEFAULT_PERCH_MODEL_TYPE = "Perch2"
+DEFAULT_PERCH_MODEL_NAME = "perch"
+DEFAULT_PERCH_MODEL_TYPE = "Perch"
+DEFAULT_PERCH_SAMPLE_RATE = 32000
 DEFAULT_EXTENSIONS = ("mp3", "wav", "flac", "ogg", "m4a")
 DEFAULT_CACHE_DIR = get_project_paths().root / "data" / "external" / "models" / "audio" / "huggingface"
 SAFE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -230,6 +231,7 @@ def _load_existing_audio_items(
     window_seconds: float | None,
     overlap_seconds: float | None,
     extensions: tuple[str, ...],
+    include_partial: bool = False,
 ) -> tuple[dict[str, dict[str, Any]], int]:
     if not run_root.exists():
         return {}, 0
@@ -237,53 +239,56 @@ def _load_existing_audio_items(
     existing_items: dict[str, dict[str, Any]] = {}
     compatible_run_count = 0
     run_dirs = sorted((child for child in run_root.iterdir() if child.is_dir()), key=lambda item: item.name)
+    suffixes = [".partial", ""] if include_partial else [""]
     for run_dir in run_dirs:
-        metadata_path = run_dir / "metadata.json"
-        manifest_path = run_dir / "audio_manifest.tsv"
-        embeddings_path = run_dir / "embeddings.npy"
-        audio_ids_path = run_dir / "audio_ids.json"
-        qids_path = run_dir / "qids.json"
-        required_paths = [metadata_path, manifest_path, embeddings_path, audio_ids_path, qids_path]
-        if not all(path.exists() for path in required_paths):
-            continue
-
-        metadata = _read_json(metadata_path)
-        if not _resume_metadata_matches(
-            metadata,
-            input_dir=input_dir,
-            backend=backend,
-            model_name=model_name,
-            max_seconds=max_seconds,
-            target_sample_rate=target_sample_rate,
-            window_seconds=window_seconds,
-            overlap_seconds=overlap_seconds,
-            extensions=extensions,
-        ):
-            continue
-
-        manifest_rows = _read_tsv(manifest_path)
-        audio_ids = list(_read_json(audio_ids_path))
-        qids = list(_read_json(qids_path))
-        embeddings = np.asarray(np.load(embeddings_path), dtype=np.float32)
-        if embeddings.ndim != 2:
-            continue
-        if len(audio_ids) != embeddings.shape[0] or len(qids) != embeddings.shape[0]:
-            continue
-
-        index_by_audio_id = {str(audio_id): index for index, audio_id in enumerate(audio_ids)}
-        compatible_run_count += 1
-        for row in manifest_rows:
-            audio_id = str(row.get("audio_id") or "")
-            index = index_by_audio_id.get(audio_id)
-            if index is None:
+        for suffix in suffixes:
+            metadata_path = run_dir / f"metadata{suffix}.json"
+            manifest_path = run_dir / f"audio_manifest{suffix}.tsv"
+            embeddings_path = run_dir / f"embeddings{suffix}.npy"
+            audio_ids_path = run_dir / f"audio_ids{suffix}.json"
+            qids_path = run_dir / f"qids{suffix}.json"
+            required_paths = [metadata_path, manifest_path, embeddings_path, audio_ids_path, qids_path]
+            if not all(path.exists() for path in required_paths):
                 continue
-            existing_items[audio_id] = {
-                "audio_id": audio_id,
-                "qid": str(qids[index]),
-                "embedding": np.asarray(embeddings[index], dtype=np.float32).copy(),
-                "manifest_row": {column: str(row.get(column) or "") for column in MANIFEST_COLUMNS},
-                "source_run_dir": str(run_dir),
-            }
+
+            metadata = _read_json(metadata_path)
+            if not _resume_metadata_matches(
+                metadata,
+                input_dir=input_dir,
+                backend=backend,
+                model_name=model_name,
+                max_seconds=max_seconds,
+                target_sample_rate=target_sample_rate,
+                window_seconds=window_seconds,
+                overlap_seconds=overlap_seconds,
+                extensions=extensions,
+            ):
+                continue
+
+            manifest_rows = _read_tsv(manifest_path)
+            audio_ids = list(_read_json(audio_ids_path))
+            qids = list(_read_json(qids_path))
+            embeddings = np.asarray(np.load(embeddings_path), dtype=np.float32)
+            if embeddings.ndim != 2:
+                continue
+            if len(audio_ids) != embeddings.shape[0] or len(qids) != embeddings.shape[0]:
+                continue
+
+            index_by_audio_id = {str(audio_id): index for index, audio_id in enumerate(audio_ids)}
+            compatible_run_count += 1
+            for row in manifest_rows:
+                audio_id = str(row.get("audio_id") or "")
+                index = index_by_audio_id.get(audio_id)
+                if index is None:
+                    continue
+                existing_items[audio_id] = {
+                    "audio_id": audio_id,
+                    "qid": str(qids[index]),
+                    "embedding": np.asarray(embeddings[index], dtype=np.float32).copy(),
+                    "manifest_row": {column: str(row.get(column) or "") for column in MANIFEST_COLUMNS},
+                    "source_run_dir": str(run_dir),
+                    "source_suffix": suffix,
+                }
     return existing_items, compatible_run_count
 
 
@@ -326,6 +331,34 @@ def build_audio_id(path: Path, qid: str, input_dir: Path) -> str:
     else:
         suffix = _safe_component(path.stem)
     return f"{qid}_{suffix}"
+
+
+def _probe_audio_duration_seconds(path: Path) -> float:
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        raise RuntimeError("ffprobe is not available.")
+    command = [
+        ffprobe,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ]
+    proc = subprocess.run(command, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if proc.returncode != 0:
+        stderr = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"ffprobe failed to inspect {path}: {stderr}")
+    value = proc.stdout.decode("utf-8", errors="replace").strip()
+    try:
+        duration = float(value)
+    except ValueError as exc:
+        raise RuntimeError(f"ffprobe returned an invalid duration for {path}: {value!r}") from exc
+    if duration <= 0:
+        raise RuntimeError(f"ffprobe returned a non-positive duration for {path}: {duration}")
+    return duration
 
 
 def _load_with_ffmpeg(path: Path, target_sample_rate: int, max_seconds: float | None) -> tuple[np.ndarray, int]:
@@ -456,28 +489,6 @@ def _save_audio_embedding_store(store: AudioEmbeddingStore, output_dir: Path, *,
     _write_json_atomic(output_dir / f"qids{file_suffix}.json", store.qids)
     _write_json_atomic(output_dir / f"metadata{file_suffix}.json", store.metadata)
 
-
-def _waveform_to_wav_bytes(waveform: np.ndarray, sample_rate: int) -> bytes:
-    """Serialize one mono waveform to 16-bit WAV bytes. / 1 本の mono 波形を 16bit WAV にする。"""
-
-    waveform_array = np.asarray(waveform, dtype=np.float32).reshape(-1)
-    waveform_array = np.clip(waveform_array, -1.0, 1.0)
-    pcm = np.asarray(np.round(waveform_array * 32767.0), dtype=np.int16)
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
-        temp_path = Path(handle.name)
-    try:
-        with wave.open(str(temp_path), "wb") as wav_file:
-            wav_file.setnchannels(1)
-            wav_file.setsampwidth(2)
-            wav_file.setframerate(sample_rate)
-            wav_file.writeframes(pcm.tobytes())
-        return temp_path.read_bytes()
-    finally:
-        if temp_path.exists():
-            try:
-                temp_path.unlink()
-            except FileNotFoundError:
-                pass
 
 
 def _coerce_embedding_matrix(encoded: Any, expected_rows: int) -> np.ndarray:
@@ -643,8 +654,6 @@ class BirdNETAudioEncoder:
 
         self.model_type = model_type
         self.model_version = model_version
-        self.requested_backend = backend
-        self.requested_device = device
         self.backend, self.runtime_device = resolve_birdnet_runtime(device, backend)
         _ensure_spawn_start_method_for_birdnet_gpu(self.runtime_device)
         self.device = "cuda" if self.runtime_device.startswith("GPU") else "cpu"
@@ -700,6 +709,9 @@ class BirdNET2AudioEncoder:
         backend: str = DEFAULT_BIRDNET_BACKEND,
         device: str = "cpu",
         model: Any | None = None,
+        model_batch_size: int | None = None,
+        n_workers: int | None = None,
+        n_producers: int | None = None,
     ):
         try:
             import birdnet
@@ -710,12 +722,13 @@ class BirdNET2AudioEncoder:
 
         self.model_type = model_type
         self.model_version = model_version
-        self.requested_backend = backend
-        self.requested_device = device
         self.backend, self.runtime_device = resolve_birdnet_runtime(device, backend)
         _ensure_spawn_start_method_for_birdnet_gpu(self.runtime_device)
         self.device = "cuda" if self.runtime_device.startswith("GPU") else "cpu"
         self.sample_rate = DEFAULT_BIRDNET_SAMPLE_RATE
+        self.model_batch_size = None if model_batch_size is None else max(1, int(model_batch_size))
+        self.n_workers = None if n_workers is None else max(1, int(n_workers))
+        self.n_producers = None if n_producers is None else max(1, int(n_producers))
         self.model = model if model is not None else birdnet.load(model_type, model_version, self.backend)
 
     def encode_files(self, paths: list[Path], *, max_audio_duration_min: float | None = None) -> np.ndarray:
@@ -728,12 +741,21 @@ class BirdNET2AudioEncoder:
             ]
             return np.empty(0, dtype=dtype)
         use_gpu = self.runtime_device.startswith("GPU")
+        cpu_count = max(1, os.cpu_count() or 1)
+        effective_batch_size = self.model_batch_size or max(1, len(paths))
+        effective_batch_size = max(1, min(effective_batch_size, len(paths)))
+        if use_gpu:
+            effective_n_workers = self.n_workers or 1
+            effective_n_producers = self.n_producers or min(max(2, effective_batch_size), cpu_count, 8)
+        else:
+            effective_n_workers = self.n_workers or min(len(paths), cpu_count)
+            effective_n_producers = self.n_producers or min(len(paths), cpu_count)
         encoded = self.model.encode(
             [str(path) for path in paths],
             device=self.runtime_device,
-            batch_size=1 if use_gpu else max(1, len(paths)),
-            n_workers=1 if use_gpu else None,
-            n_producers=1,
+            batch_size=effective_batch_size,
+            n_workers=effective_n_workers,
+            n_producers=effective_n_producers,
             overlap_duration_s=0.0,
             max_audio_duration_min=max_audio_duration_min,
         )
@@ -743,26 +765,31 @@ class BirdNET2AudioEncoder:
 
 
 class PerchAudioEncoder:
-    """Encode 5-second windows with Perch2 from Bioacoustics Model Zoo. / Bioacoustics Model Zoo の Perch2 で 5 秒窓を埋め込む。"""
+    """Encode 5-second windows with legacy official Perch through the clip DataFrame API."""
 
     def __init__(
         self,
-        model_name: str = DEFAULT_PERCH_MODEL_NAME,
         device: str = "cpu",
         model: Any | None = None,
+        dataloader_num_workers: int = 0,
     ):
-        self.model_name = model_name
         self.model_type = DEFAULT_PERCH_MODEL_TYPE
-        self.model_version = ""
+        self.model_version = "8"
         self.backend = "bioacoustics-model-zoo"
-        self.device = device
-        self.sample_rate = 22050
+        self.device = resolve_torch_device(device)
+        self.sample_rate = DEFAULT_PERCH_SAMPLE_RATE
+        self.dataloader_num_workers = max(0, int(dataloader_num_workers))
         if model is not None:
             self.model = model
             return
+        os.environ.setdefault("HOME", "/tmp")
+        os.environ.setdefault("USER", "trmt")
+        os.environ.setdefault("LOGNAME", os.environ.get("USER", "trmt"))
+        os.environ.setdefault("USERNAME", os.environ.get("USER", "trmt"))
+        os.environ.setdefault("TORCHINDUCTOR_CACHE_DIR", "/tmp/torchinductor")
         try:
             import bioacoustics_model_zoo as bmz
-        except Exception as exc:  # pragma: no cover - optional dependency guard
+        except ModuleNotFoundError as exc:  # pragma: no cover - optional dependency guard
             raise RuntimeError(
                 "Perch backend requires the `bioacoustics-model-zoo` Python package. Install the audio-perch extra and retry."
             ) from exc
@@ -772,22 +799,16 @@ class PerchAudioEncoder:
         else:  # pragma: no cover - future-proof fallback
             raise RuntimeError(f"bioacoustics-model-zoo does not expose a {self.model_type} model.")
 
-    def _call_model(self, audio_paths: list[str]) -> Any:
-        if hasattr(self.model, "embed"):
-            return self.model.embed(audio_paths)
-        if hasattr(self.model, "generate_embeddings"):
-            return self.model.generate_embeddings(audio_paths)
-        raise RuntimeError("Perch model does not expose embed() or generate_embeddings().")
-
-    def encode_batch(self, waveforms: list[np.ndarray]) -> np.ndarray:
-        with tempfile.TemporaryDirectory(prefix="perch_embed_") as tmpdir:
-            temp_paths: list[str] = []
-            for index, waveform in enumerate(waveforms):
-                temp_path = Path(tmpdir) / f"window_{index:04d}.wav"
-                temp_path.write_bytes(_waveform_to_wav_bytes(_normalize_waveform_array(waveform), self.sample_rate))
-                temp_paths.append(str(temp_path))
-            encoded = self._call_model(temp_paths)
-        return _coerce_embedding_matrix(encoded, expected_rows=len(waveforms))
+    def embed_clips(self, samples_df: Any, *, batch_size: int) -> Any:
+        if not hasattr(self.model, "embed"):
+            raise RuntimeError("Perch model does not expose embed().")
+        return self.model.embed(
+            samples_df,
+            progress_bar=False,
+            return_dfs=True,
+            batch_size=max(1, int(batch_size)),
+            num_workers=self.dataloader_num_workers,
+        )
 
 
 def download_audio_models(
@@ -821,6 +842,319 @@ def download_audio_models(
     )
 
 
+def _build_audio_embeddings_perch(
+    *,
+    input_dir: Path,
+    output_dir: Path,
+    model_name: str,
+    device: str,
+    batch_size: int,
+    max_seconds: float,
+    extensions: tuple[str, ...],
+    encoder: Any,
+    resume_existing: bool = False,
+) -> dict[str, Any]:
+    import pandas as pd
+
+    files = discover_audio_files(input_dir, extensions=extensions)
+    if not files:
+        raise FileNotFoundError(f"No audio files were found under: {input_dir}")
+
+    run_root = output_dir / "perch" / _safe_component(model_name)
+    existing_items: dict[str, dict[str, Any]] = {}
+    resume_source_run_count = 0
+    if resume_existing:
+        existing_items, resume_source_run_count = _load_existing_audio_items(
+            run_root,
+            input_dir=input_dir,
+            backend="perch",
+            model_name=model_name,
+            max_seconds=max_seconds,
+            target_sample_rate=DEFAULT_PERCH_SAMPLE_RATE,
+            window_seconds=5.0,
+            overlap_seconds=0.0,
+            extensions=extensions,
+            include_partial=True,
+        )
+
+    run_dir = run_root / _timestamp_mmddhhmm()
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_rows: list[dict[str, str]] = []
+    failed_rows: list[dict[str, str]] = []
+    audio_ids: list[str] = []
+    qids: list[str] = []
+    embedding_rows: list[np.ndarray] = []
+    pending_rows: list[dict[str, str]] = []
+    pending_samples: list[tuple[str, float, float]] = []
+
+    total_files = len(files)
+    processed_files = 0
+    batch_count = 0
+    reused_item_count = 0
+    new_item_count = 0
+    last_progress_time = time.monotonic()
+
+    existing_items_by_audio_id = {str(item["audio_id"]): item for item in existing_items.values()}
+
+    def _build_store(*, partial: bool) -> AudioEmbeddingStore:
+        if not embedding_rows:
+            raise ValueError("Cannot build an embedding store without any embeddings.")
+        embeddings = np.stack(embedding_rows, axis=0).astype(np.float32, copy=False)
+        return AudioEmbeddingStore(
+            audio_ids=list(audio_ids),
+            qids=list(qids),
+            embeddings=embeddings,
+            metadata={
+                "kind": "audio_perch_embeddings",
+                "dataset": "xeno-canto",
+                "created_at_utc": _timestamp_utc(),
+                "backend": "perch",
+                "backend_notes": "Legacy official Perch embed() path using clip DataFrame input.",
+                "backend_required_python_packages": ["bioacoustics-model-zoo", "tensorflow", "tensorflow-hub", "soundfile"],
+                "backend_required_system_packages": ["ffmpeg", "libsndfile"],
+                "backend_window_seconds": 5.0,
+                "backend_overlap_seconds": 0.0,
+                "backend_sample_rate_hz": DEFAULT_PERCH_SAMPLE_RATE,
+                "backend_embedding_scope": "window",
+                "input_dir": str(input_dir),
+                "output_root": str(output_dir),
+                "run_dir": str(run_dir),
+                "model_name": model_name,
+                "device": device,
+                "resolved_device": getattr(encoder, "device", device),
+                "batch_size": batch_size,
+                "max_seconds": max_seconds,
+                "target_sample_rate": DEFAULT_PERCH_SAMPLE_RATE,
+                "window_seconds": 5.0,
+                "overlap_seconds": 0.0,
+                "encoder_model_type": getattr(encoder, "model_type", ""),
+                "encoder_model_version": getattr(encoder, "model_version", ""),
+                "encoder_backend_variant": getattr(encoder, "backend", ""),
+                "embedding_dim": int(embeddings.shape[1]),
+                "item_count": len(audio_ids),
+                "unique_qid_count": len(set(qids)),
+                "file_extension_whitelist": list(extensions),
+                "failed_count": len(failed_rows),
+                "decoder": "perch_clip_dataframe_api",
+                "resume_existing": resume_existing,
+                "reused_item_count": reused_item_count,
+                "new_item_count": new_item_count,
+                "resume_source_run_count": resume_source_run_count,
+                "processed_files": processed_files,
+                "total_files": total_files,
+                "batch_count": batch_count,
+                "partial_checkpoint": partial,
+            },
+        )
+
+    def _write_partial_outputs(*, reason: str) -> None:
+        if not embedding_rows:
+            return
+        store = _build_store(partial=True)
+        _save_audio_embedding_store(store, run_dir, file_suffix=".partial")
+        _write_tsv_atomic(run_dir / "audio_manifest.partial.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
+        _write_json_atomic(run_dir / "failed_items.partial.json", failed_rows)
+        _write_json_atomic(
+            run_dir / "summary.partial.json",
+            {
+                "backend": "perch",
+                "model_name": model_name,
+                "run_dir": str(run_dir),
+                "item_count": len(audio_ids),
+                "failed_count": len(failed_rows),
+                "processed_files": processed_files,
+                "total_files": total_files,
+                "batch_count": batch_count,
+                "reused_item_count": reused_item_count,
+                "new_item_count": new_item_count,
+                "checkpoint_reason": reason,
+                "completed": False,
+                "embeddings_npy": str(run_dir / "embeddings.partial.npy"),
+                "audio_ids_json": str(run_dir / "audio_ids.partial.json"),
+                "qids_json": str(run_dir / "qids.partial.json"),
+                "metadata_json": str(run_dir / "metadata.partial.json"),
+                "audio_manifest_tsv": str(run_dir / "audio_manifest.partial.tsv"),
+                "failed_items_json": str(run_dir / "failed_items.partial.json"),
+            },
+        )
+
+    def append_reused_item(item: dict[str, Any]) -> None:
+        nonlocal reused_item_count
+        row_with_index = dict(item["manifest_row"])
+        row_with_index["embedding_index"] = str(len(audio_ids))
+        manifest_rows.append(row_with_index)
+        audio_ids.append(str(item["audio_id"]))
+        qids.append(str(item["qid"]))
+        embedding_rows.append(np.asarray(item["embedding"], dtype=np.float32).copy())
+        reused_item_count += 1
+
+    def report_progress(*, current_label: str = "", force: bool = False) -> None:
+        nonlocal last_progress_time
+        now = time.monotonic()
+        if not force and now - last_progress_time < 0.5:
+            return
+        label = f" | {current_label}" if current_label else ""
+        _render_progress_line(
+            f"audio-perch | files {processed_files}/{total_files} | items {len(audio_ids) + len(pending_rows)} | "
+            f"reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
+        )
+        last_progress_time = now
+
+    def flush_batch() -> None:
+        nonlocal batch_count, new_item_count
+        if not pending_rows:
+            return
+        clip_index = pd.MultiIndex.from_tuples(
+            pending_samples, names=["file", "start_time", "end_time"]
+        )
+        sample_df = pd.DataFrame(index=clip_index)
+        embeddings_df = encoder.embed_clips(sample_df, batch_size=batch_size)
+        if hasattr(embeddings_df, "to_numpy"):
+            matrix = np.asarray(embeddings_df.to_numpy(), dtype=np.float32)
+        else:
+            matrix = np.asarray(embeddings_df, dtype=np.float32)
+        if matrix.ndim != 2:
+            raise ValueError(f"Perch encoder must return a 2D matrix, got shape {matrix.shape}")
+        if matrix.shape[0] != len(pending_rows):
+            raise ValueError("Perch encoder row count does not match the clip batch size")
+        for row_index, row in enumerate(pending_rows):
+            row_with_index = dict(row)
+            row_with_index["embedding_index"] = str(len(audio_ids))
+            manifest_rows.append(row_with_index)
+            audio_ids.append(row["audio_id"])
+            qids.append(row["qid"])
+            embedding_rows.append(np.asarray(matrix[row_index], dtype=np.float32).copy())
+            new_item_count += 1
+        pending_rows.clear()
+        pending_samples.clear()
+        batch_count += 1
+        _write_partial_outputs(reason="batch_complete")
+        report_progress(force=True, current_label="batch complete")
+
+    report_progress(force=True, current_label="starting")
+    for path in files:
+        qid = infer_qid(path, input_dir)
+        base_audio_id = build_audio_id(path, qid, input_dir)
+        relative_path = str(path.relative_to(input_dir)) if path.is_relative_to(input_dir) else str(path)
+        try:
+            duration_seconds = min(_probe_audio_duration_seconds(path), max_seconds) if max_seconds > 0 else _probe_audio_duration_seconds(path)
+        except Exception as exc:
+            failed_rows.append(
+                {
+                    "audio_id": base_audio_id,
+                    "qid": qid,
+                    "source_path": str(path),
+                    "relative_path": relative_path,
+                    "error": str(exc),
+                }
+            )
+            processed_files += 1
+            report_progress(force=True, current_label=f"failed {path.name}")
+            continue
+
+        window_start = 0.0
+        window_index = 0
+        file_had_new_clip = False
+        while window_start < max(duration_seconds, 1e-9):
+            window_end = min(window_start + 5.0, duration_seconds)
+            clip_duration = max(window_end - window_start, 0.0)
+            if clip_duration <= 0:
+                break
+            item_audio_id = f"{base_audio_id}_w{window_index:04d}"
+            existing_item = existing_items_by_audio_id.get(item_audio_id)
+            if existing_item is not None:
+                append_reused_item(existing_item)
+            else:
+                pending_samples.append((str(path), float(window_start), float(window_end)))
+                pending_rows.append(
+                    {
+                        "audio_id": item_audio_id,
+                        "qid": qid,
+                        "source_path": str(path),
+                        "relative_path": relative_path,
+                        "window_index": str(window_index),
+                        "window_start_seconds": f"{window_start:.6f}",
+                        "window_end_seconds": f"{window_end:.6f}",
+                        "window_seconds": f"{clip_duration:.6f}",
+                        "file_type": path.suffix.lower().lstrip("."),
+                        "sample_rate": str(DEFAULT_PERCH_SAMPLE_RATE),
+                        "num_samples": str(int(round(clip_duration * DEFAULT_PERCH_SAMPLE_RATE))),
+                        "duration_seconds": f"{clip_duration:.6f}",
+                    }
+                )
+                file_had_new_clip = True
+                if len(pending_rows) >= max(1, batch_size):
+                    flush_batch()
+            if window_end >= duration_seconds:
+                break
+            window_start += 5.0
+            window_index += 1
+
+        processed_files += 1
+        if file_had_new_clip:
+            report_progress(force=True, current_label=path.name)
+        else:
+            report_progress(force=True, current_label=f"reused {path.name}")
+
+    flush_batch()
+
+    if not embedding_rows:
+        _finish_progress_line(
+            f"audio-perch done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+        )
+        raise RuntimeError("No audio files could be embedded. Check the Perch setup and input files.")
+
+    store = _build_store(partial=False)
+    embeddings = store.embeddings
+    _save_audio_embedding_store(store, run_dir)
+    _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
+    _write_json_atomic(run_dir / "failed_items.json", failed_rows)
+    _finish_progress_line(
+        f"audio-perch done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+    )
+
+    summary = {
+        "kind": "audio_perch_embeddings",
+        "created_at_utc": store.metadata["created_at_utc"],
+        "input_dir": str(input_dir),
+        "output_root": str(output_dir),
+        "run_dir": str(run_dir),
+        "model_name": model_name,
+        "device": device,
+        "resolved_device": getattr(encoder, "device", device),
+        "batch_size": batch_size,
+        "max_seconds": max_seconds,
+        "target_sample_rate": DEFAULT_PERCH_SAMPLE_RATE,
+        "embedding_dim": int(embeddings.shape[1]),
+        "item_count": len(audio_ids),
+        "unique_qid_count": len(set(qids)),
+        "failed_count": len(failed_rows),
+        "successful_count": len(audio_ids),
+        "resume_existing": resume_existing,
+        "reused_item_count": reused_item_count,
+        "new_item_count": new_item_count,
+        "resume_source_run_count": resume_source_run_count,
+        "output_files": {
+            "embeddings_npy": str(run_dir / "embeddings.npy"),
+            "audio_ids_json": str(run_dir / "audio_ids.json"),
+            "qids_json": str(run_dir / "qids.json"),
+            "audio_manifest_tsv": str(run_dir / "audio_manifest.tsv"),
+            "metadata_json": str(run_dir / "metadata.json"),
+            "failed_items_json": str(run_dir / "failed_items.json"),
+            "partial_embeddings_npy": str(run_dir / "embeddings.partial.npy"),
+            "partial_audio_ids_json": str(run_dir / "audio_ids.partial.json"),
+            "partial_qids_json": str(run_dir / "qids.partial.json"),
+            "partial_audio_manifest_tsv": str(run_dir / "audio_manifest.partial.tsv"),
+            "partial_metadata_json": str(run_dir / "metadata.partial.json"),
+            "partial_failed_items_json": str(run_dir / "failed_items.partial.json"),
+            "partial_summary_json": str(run_dir / "summary.partial.json"),
+        },
+    }
+    _write_json_atomic(run_dir / "summary.json", summary)
+    return {"store": store, "summary": summary, "manifest_rows": manifest_rows, "failed_rows": failed_rows}
+
+
 def _build_audio_embeddings_birdnet2(
     *,
     input_dir: Path,
@@ -831,12 +1165,28 @@ def _build_audio_embeddings_birdnet2(
     max_seconds: float,
     extensions: tuple[str, ...],
     encoder: Any,
+    resume_existing: bool = False,
 ) -> dict[str, Any]:
     files = discover_audio_files(input_dir, extensions=extensions)
     if not files:
         raise FileNotFoundError(f"No audio files were found under: {input_dir}")
 
     run_root = output_dir / "birdnet_2" / _safe_component(model_name)
+    existing_items: dict[str, dict[str, Any]] = {}
+    resume_source_run_count = 0
+    if resume_existing:
+        existing_items, resume_source_run_count = _load_existing_audio_items(
+            run_root,
+            input_dir=input_dir,
+            backend="birdnet_2",
+            model_name=model_name,
+            max_seconds=max_seconds,
+            target_sample_rate=DEFAULT_BIRDNET_SAMPLE_RATE,
+            window_seconds=3.0,
+            overlap_seconds=0.0,
+            extensions=extensions,
+            include_partial=True,
+        )
     run_dir = run_root / _timestamp_mmddhhmm()
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -893,10 +1243,10 @@ def _build_audio_embeddings_birdnet2(
                 "file_extension_whitelist": list(extensions),
                 "failed_count": len(failed_rows),
                 "decoder": "birdnet_file_api",
-                "resume_existing": False,
+                "resume_existing": resume_existing,
                 "reused_item_count": reused_item_count,
                 "new_item_count": new_item_count,
-                "resume_source_run_count": 0,
+                "resume_source_run_count": resume_source_run_count,
                 "processed_files": processed_files,
                 "total_files": total_files,
                 "batch_count": batch_count,
@@ -941,9 +1291,19 @@ def _build_audio_embeddings_birdnet2(
         label = f" | {current_label}" if current_label else ""
         _render_progress_line(
             f"audio-birdnet_2 | files {processed_files}/{total_files} | items {len(audio_ids)} | "
-            f"failed {len(failed_rows)} | batches {batch_count}{label}"
+            f"reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
         )
         last_progress_time = now
+
+    def append_reused_item(item: dict[str, Any]) -> None:
+        nonlocal reused_item_count
+        row_with_index = dict(item["manifest_row"])
+        row_with_index["embedding_index"] = str(len(audio_ids))
+        manifest_rows.append(row_with_index)
+        audio_ids.append(str(item["audio_id"]))
+        qids.append(str(item["qid"]))
+        embedding_rows.append(np.asarray(item["embedding"], dtype=np.float32).copy())
+        reused_item_count += 1
 
     def append_structured_rows(structured: np.ndarray, source_paths: list[Path]) -> None:
         nonlocal new_item_count
@@ -979,6 +1339,18 @@ def _build_audio_embeddings_birdnet2(
             qids.append(qid)
             embedding_rows.append(np.asarray(row["embedding"], dtype=np.float32).copy())
             new_item_count += 1
+
+    existing_items_by_source: dict[str, list[dict[str, Any]]] = {}
+    for item in existing_items.values():
+        source_path = _normalize_compare_path(item["manifest_row"]["source_path"])
+        existing_items_by_source.setdefault(source_path, []).append(item)
+    for items in existing_items_by_source.values():
+        items.sort(
+            key=lambda item: (
+                int(str(item["manifest_row"].get("window_index") or "0") or "0"),
+                str(item["audio_id"]),
+            )
+        )
 
     def process_batch(batch_paths: list[Path]) -> None:
         nonlocal batch_count, processed_files
@@ -1019,6 +1391,14 @@ def _build_audio_embeddings_birdnet2(
     report_progress(force=True, current_label="starting")
     pending_paths: list[Path] = []
     for path in files:
+        normalized_source_path = _normalize_compare_path(path)
+        reused_items = existing_items_by_source.get(normalized_source_path)
+        if reused_items:
+            for item in reused_items:
+                append_reused_item(item)
+            processed_files += 1
+            report_progress(force=True, current_label=f"reused {path.name}")
+            continue
         pending_paths.append(path)
         if len(pending_paths) >= max(1, batch_size):
             process_batch(pending_paths)
@@ -1027,7 +1407,7 @@ def _build_audio_embeddings_birdnet2(
 
     if not embedding_rows:
         _finish_progress_line(
-            f"audio-birdnet_2 done | files {processed_files}/{total_files} | items 0 | failed {len(failed_rows)} | batches {batch_count}"
+            f"audio-birdnet_2 done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
         )
         raise RuntimeError("No audio files could be embedded. Check the BirdNET_2 setup and input files.")
 
@@ -1037,7 +1417,7 @@ def _build_audio_embeddings_birdnet2(
     _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
     _write_json_atomic(run_dir / "failed_items.json", failed_rows)
     _finish_progress_line(
-        f"audio-birdnet_2 done | files {processed_files}/{total_files} | items {len(audio_ids)} | failed {len(failed_rows)} | batches {batch_count}"
+        f"audio-birdnet_2 done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
     )
 
     summary = {
@@ -1057,10 +1437,10 @@ def _build_audio_embeddings_birdnet2(
         "unique_qid_count": len(set(qids)),
         "failed_count": len(failed_rows),
         "successful_count": len(audio_ids),
-        "resume_existing": False,
-        "reused_item_count": 0,
+        "resume_existing": resume_existing,
+        "reused_item_count": reused_item_count,
         "new_item_count": new_item_count,
-        "resume_source_run_count": 0,
+        "resume_source_run_count": resume_source_run_count,
         "output_files": {
             "embeddings_npy": str(run_dir / "embeddings.npy"),
             "audio_ids_json": str(run_dir / "audio_ids.json"),
@@ -1114,7 +1494,7 @@ def build_audio_embeddings(
             model_name = f"birdnet-{encoder.model_type}-{encoder.model_version}-{encoder.backend}"
     elif backend == "birdnet_2":
         if encoder is None:
-            encoder = BirdNET2AudioEncoder(device=device)
+            encoder = BirdNET2AudioEncoder(device=device, model_batch_size=batch_size)
         if model_name == DEFAULT_MODEL_NAME:
             model_name = f"birdnet_2-{encoder.model_type}-{encoder.model_version}-{encoder.backend}"
         return _build_audio_embeddings_birdnet2(
@@ -1126,12 +1506,24 @@ def build_audio_embeddings(
             max_seconds=max_seconds,
             extensions=extensions,
             encoder=encoder,
+            resume_existing=resume_existing,
         )
     elif backend == "perch":
         if model_name == DEFAULT_MODEL_NAME:
             model_name = DEFAULT_PERCH_MODEL_NAME
         if encoder is None:
             encoder = PerchAudioEncoder(device=device)
+        return _build_audio_embeddings_perch(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            model_name=model_name,
+            device=device,
+            batch_size=batch_size,
+            max_seconds=max_seconds,
+            extensions=extensions,
+            encoder=encoder,
+            resume_existing=resume_existing,
+        )
     else:
         raise NotImplementedError(
             f"Backend '{backend}' is registered with the contract ({backend_spec.window_seconds}s windows, "
@@ -1531,6 +1923,7 @@ def main(argv: list[str] | None = None) -> int:
         target_sample_rate=args.target_sample_rate,
         extensions=extensions,
         cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+        resume_existing=args.resume_existing,
     )
     return 0
 

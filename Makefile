@@ -3,7 +3,7 @@ PYTHONPATH := src
 EXTRACT_DUMP_JSON_ARGS ?=
 EMBEDDING_ALGORITHM ?= node2vec
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models build-audio-gpu-image run-audio-gpu-shell check-audio-gpu-tensorflow check-birdnet-ngc-tensorflow-gpu build-audio-birdnet-gpu-image run-audio-birdnet-gpu-shell build-audio-embeddings-wav2vec2 finetune-wav2vec2-crossval build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-birdnet-2 build-audio-embeddings-birdnet-2-gpu build-audio-embeddings-perch build-audio-embeddings-perch-gpu build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-ngc-tensorflow-gpu build-audio-birdnet-gpu-image run-audio-birdnet-gpu-shell build-audio-perch-gpu-image run-audio-perch-gpu-shell check-audio-perch-gpu-tensorflow build-audio-embeddings-wav2vec2 finetune-wav2vec2-crossval build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-birdnet-2 build-audio-embeddings-birdnet-2-gpu build-audio-embeddings-perch build-audio-embeddings-perch-gpu build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -35,14 +35,14 @@ fetch-xeno-canto-audio:
 download-audio-models:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli download-audio-models
 
-build-audio-gpu-image:
-	bash scripts/run_audio_gpu_container.sh --build-only
+build-audio-perch-gpu-image:
+	bash scripts/run_audio_perch_gpu_container.sh --build-only
 
-run-audio-gpu-shell:
-	bash scripts/run_audio_gpu_container.sh
+run-audio-perch-gpu-shell:
+	bash scripts/run_audio_perch_gpu_container.sh
 
-check-audio-gpu-tensorflow:
-	bash scripts/run_audio_gpu_container.sh python3 -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+check-audio-perch-gpu-tensorflow:
+	bash scripts/run_audio_perch_gpu_container.sh python3 -c "import tensorflow as tf; print(tf.__version__); print(tf.config.list_physical_devices('GPU'))"
 
 check-birdnet-ngc-tensorflow-gpu:
 	docker run --rm --gpus all nvcr.io/nvidia/tensorflow:25.02-tf2-py3 python3 -c "import tensorflow as tf; print(tf.__version__); print(tf.config.list_physical_devices('GPU'))"
@@ -75,7 +75,7 @@ build-audio-embeddings-perch:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend perch
 
 build-audio-embeddings-perch-gpu:
-	bash scripts/run_audio_gpu_container.sh python3 -m multi_bird_db.cli build-audio-embeddings --backend perch --device cuda
+	bash scripts/run_audio_perch_gpu_container.sh python3 -m multi_bird_db.cli build-audio-embeddings --backend perch --device cuda
 
 build-graph:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-graph
