@@ -1,6 +1,6 @@
 # README_audio
 
-`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はホストの `.venv_BirdDB`、BirdNET / Perch の GPU 実行は別の Docker 環境を前提に整理します。
+`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はホストの `.venv_BirdDB`、BirdNET の GPU 実行はこのリポジトリ内の Docker 環境を前提に整理します。Perch はこのマシンでは追わず、別マシン・別環境で実行して生成物だけを戻す前提にします。
 
 ## 概要
 
@@ -34,9 +34,13 @@
 
 - `wav2vec2`
   - ホストの `.venv_BirdDB` で実行します
-- `birdnet` / `perch`
+- `birdnet` / `birdnet_2`
   - CPU 実行はホスト側でも可能です
   - GPU 実行は Docker 側の別環境を使います。詳細は [README_Docker.md](README_Docker.md) を参照してください
+- `perch`
+  - backend 自体は残しています
+  - このマシン向けの実行導線は保守しません
+  - 別マシン・別環境で埋め込みを作成し、生成された `embeddings.npy` と manifest をこのリポジトリへ戻してください
 
 backend ごとの既定:
 
@@ -70,10 +74,10 @@ backend ごとの既定:
   - 既定サンプルレート: 32 kHz
   - 目的: Bioacoustics Model Zoo の旧公式 `Perch` 埋め込み
   - 必要な Python 系: `bioacoustics-model-zoo`, `tensorflow`, `tensorflow-hub`, `soundfile`
-  - このコード経路は `torch` 非依存ですが、`bioacoustics-model-zoo` / `opensoundscape` の依存として `torch` 系が入ることがあります
+  - このコード経路は `torch` 非依存ですが、依存解決の都合で `torch` 系が入ることがあります
   - 必要なシステム系: `ffmpeg`, `libsndfile`
-  - 実装状況: 実装済み
-  - GPU 実行: Docker 側を推奨
+  - 実装状況: backend のみ保持
+  - 実行方針: このマシンでは保守せず、別マシン・別環境で実行
 
 ## 音声埋め込み
 
@@ -192,18 +196,10 @@ source .venv_BirdDB/bin/activate
 make build-audio-embeddings-perch
 ```
 
-Perch を GPU で使う例:
+Perch について:
 
-```bash
-make build-audio-perch-gpu-image
-make check-audio-perch-gpu-tensorflow
-make build-audio-embeddings-perch-gpu
-```
-
-補足:
-
-- ホスト側から一発で実行する場合は `make build-audio-embeddings-perch-gpu` を使います
-- すでに `make run-audio-perch-gpu-shell` でコンテナ内に入っている場合は、この `make` を重ねず、コンテナ内で `python3 -m multi_bird_db.cli ...` を直接実行してください
+- このリポジトリ内のローカル Docker wrapper は保守しません
+- 別マシン・別環境で `perch` backend を実行し、出力ディレクトリごとこのリポジトリへ戻してください
 
 直接 CLI を叩く場合:
 
@@ -219,7 +215,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 ```
 
 このコマンドは入力ディレクトリ配下を再帰的に走査し、旧公式 Perch なら 5 秒窓、`32 kHz` 相当の公式前処理で埋め込みを作ります。  
-出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
+ただしこのマシンでの動作確認は追わず、別マシン・別環境での実行を前提にします。出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
 
 生成物:
 
@@ -270,10 +266,10 @@ PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval \
 補足:
 
 - `wav2vec2` は file 単位のベースラインです
-- `birdnet` / `birdnet_2` / `perch` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
+- `birdnet` / `birdnet_2` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
 - `birdnet` は 3 秒窓、`48 kHz` です。CPU 時は `birdnet.load("acoustic", "2.4", "tf")`、GPU 時は `birdnet.load("acoustic", "2.4", "pb")` を使います
 - `perch` は 5 秒窓、`32 kHz`、`bioacoustics-model-zoo` の旧公式 `Perch.embed()` と clip DataFrame API を使います
-- `perch` の GPU 実行は BirdNET と分離した `Dockerfile.audio-perch-gpu` / `scripts/run_audio_perch_gpu_container.sh` を使います
+- `perch` は別マシン・別環境で実行し、生成物だけをこのリポジトリへ戻してください
 
 ## Xeno-canto
 
