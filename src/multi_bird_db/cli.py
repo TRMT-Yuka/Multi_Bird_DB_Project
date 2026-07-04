@@ -3,57 +3,153 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Callable
-
-from . import (
-    audio_embeddings,
-    audio_finetuning,
-    dump_extract,
-    embeddings,
-    graph,
-    graph_dash,
-    graph_evaluation,
-    language_embeddings,
-    ontology,
-    qids,
-    sqlite_store,
-    wikipedia_articles,
-    xeno_canto_audio,
-    xeno_canto_ids,
-)
+from dataclasses import dataclass
+from importlib import import_module
+from typing import Any
 
 
-def add_arguments(parser: argparse.ArgumentParser, defaults: argparse.Namespace, names: list[str]) -> None:
-    """Copy a small set of default arguments into one subcommand parser. / 既定引数の一部をサブコマンド用パーサへ写す。"""
+@dataclass(frozen=True)
+class CommandSpec:
+    """Describe one top-level CLI command. / トップレベル CLI コマンドの定義。"""
 
-    for name in names:
-        default = getattr(defaults, name)
-        if isinstance(default, bool):
-            parser.add_argument(f"--{name.replace('_', '-')}", dest=name, action="store_true", default=default)
-        else:
-            parser.add_argument(f"--{name.replace('_', '-')}", dest=name, default=default)
-
-
-def namespace_to_args(args: argparse.Namespace, names: list[str]) -> list[str]:
-    """Convert parsed values back into a flat argument list. / 解析済み引数をフラットな CLI 引数列へ戻す。"""
-
-    flat_args: list[str] = []
-    for name in names:
-        value = getattr(args, name)
-        if value is None:
-            continue
-        if isinstance(value, bool):
-            if value:
-                flat_args.append(f"--{name.replace('_', '-')}")
-            continue
-        flat_args.extend([f"--{name.replace('_', '-')}", str(value)])
-    return flat_args
+    help: str
+    module: str | None
+    handler_name: str
+    argv_prefix: tuple[str, ...] = ()
 
 
-def print_cuda_report(_: list[str] | None = None) -> int:
+COMMAND_SPECS: dict[str, CommandSpec] = {
+    "extract-qids": CommandSpec(
+        help="Extract QIDs from query.tsv.",
+        module="multi_bird_db.qids",
+        handler_name="main",
+    ),
+    "extract-dump-json": CommandSpec(
+        help="Materialize requested Wikidata entity JSON files by scanning the dump directly.",
+        module="multi_bird_db.dump_extract",
+        handler_name="main",
+    ),
+    "build-ontology": CommandSpec(
+        help="Build ontology PKL from downloaded JSON.",
+        module="multi_bird_db.ontology",
+        handler_name="main",
+    ),
+    "extract-xeno-canto-ids": CommandSpec(
+        help="Extract qid-to-Xeno-canto species ID pairs from ontology PKL.",
+        module="multi_bird_db.xeno_canto_ids",
+        handler_name="main",
+    ),
+    "fetch-xeno-canto-recording-json": CommandSpec(
+        help="Fetch and save Xeno-canto API JSON responses per species.",
+        module="multi_bird_db.xeno_canto_audio",
+        handler_name="main_api_recordings",
+    ),
+    "extract-xeno-canto-recording-ids": CommandSpec(
+        help="Extract recording IDs from saved Xeno-canto API JSON files.",
+        module="multi_bird_db.xeno_canto_audio",
+        handler_name="main_recording_map",
+    ),
+    "fetch-xeno-canto-audio": CommandSpec(
+        help="Download Xeno-canto audio files into per-QID raw directories.",
+        module="multi_bird_db.xeno_canto_audio",
+        handler_name="main",
+    ),
+    "build-audio-embeddings": CommandSpec(
+        help="Build wav2vec2-based embeddings from a directory tree of audio files.",
+        module="multi_bird_db.audio_embeddings",
+        handler_name="main",
+    ),
+    "download-audio-models": CommandSpec(
+        help="Download and cache audio embedding model assets.",
+        module="multi_bird_db.audio_embeddings",
+        handler_name="main_download",
+    ),
+    "finetune-wav2vec2-crossval": CommandSpec(
+        help="Fine-tune wav2vec2 audio classifiers across cross-validation folds.",
+        module="multi_bird_db.audio_finetuning",
+        handler_name="main",
+    ),
+    "build-graph": CommandSpec(
+        help="Build taxonomy graph PKL from ontology PKL.",
+        module="multi_bird_db.graph",
+        handler_name="main",
+    ),
+    "build-sqlite": CommandSpec(
+        help="Build a lightweight SQLite DB from ontology PKL.",
+        module="multi_bird_db.sqlite_store",
+        handler_name="main",
+    ),
+    "build-embeddings": CommandSpec(
+        help="Build graph embeddings from a taxonomy graph PKL.",
+        module="multi_bird_db.embeddings",
+        handler_name="main",
+    ),
+    "build-language-surface-manifest": CommandSpec(
+        help="Build per-language surface_id-to-text manifests from bird ontology PKL.",
+        module="multi_bird_db.language_embeddings",
+        handler_name="main",
+    ),
+    "build-language-embeddings": CommandSpec(
+        help="Build BERT-based language embeddings from bird ontology PKL.",
+        module="multi_bird_db.language_embeddings",
+        handler_name="main_embeddings",
+    ),
+    "check-gpu": CommandSpec(
+        help="Print a small CUDA / torch environment report.",
+        module=None,
+        handler_name="print_cuda_report",
+    ),
+    "serve-graph": CommandSpec(
+        help="Serve an interactive Dash Cytoscape viewer for the taxonomy graph.",
+        module="multi_bird_db.graph_dash",
+        handler_name="main",
+    ),
+    "evaluate-graph-embeddings": CommandSpec(
+        help="Evaluate graph embeddings with clustering metrics and write a report.",
+        module="multi_bird_db.graph_evaluation",
+        handler_name="main",
+    ),
+    "build-wikipedia-manifest": CommandSpec(
+        help="Build a TSV manifest for related English and Japanese Wikipedia articles.",
+        module="multi_bird_db.wikipedia_articles",
+        handler_name="main",
+        argv_prefix=("build-wikipedia-manifest",),
+    ),
+    "fetch-wikipedia-xml": CommandSpec(
+        help="Fetch English and Japanese Wikipedia article XML files.",
+        module="multi_bird_db.wikipedia_articles",
+        handler_name="main",
+        argv_prefix=("fetch-wikipedia-xml",),
+    ),
+    "extract-wikipedia-text": CommandSpec(
+        help="Extract plain text sentences from saved Wikipedia XML files.",
+        module="multi_bird_db.wikipedia_articles",
+        handler_name="main",
+        argv_prefix=("extract-wikipedia-text",),
+    ),
+}
+
+
+def print_cuda_report(argv: list[str] | None = None) -> int:
     """Print a small CUDA environment report. / CUDA 環境の簡易レポートを出す。"""
 
+    if argv and any(flag in {"-h", "--help"} for flag in argv):
+        parser = argparse.ArgumentParser(description="Print a small CUDA / torch environment report.")
+        parser.parse_args(argv)
+
+    language_embeddings = import_module("multi_bird_db.language_embeddings")
     print(json.dumps(language_embeddings.probe_cuda(), ensure_ascii=False, indent=2))
     return 0
+
+
+def _load_handler(spec: CommandSpec) -> Callable[[list[str] | None], int]:
+    """Resolve a command handler only when requested. / 必要になった時点でハンドラを解決する。"""
+
+    if spec.module is None:
+        return globals()[spec.handler_name]
+    module = import_module(spec.module)
+    handler: Any = getattr(module, spec.handler_name)
+    return handler
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,364 +157,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(description="Multi Bird DB utility CLI.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    add_arguments(
-        subparsers.add_parser("extract-qids", help="Extract QIDs from query.tsv."),
-        qids.build_parser().parse_args([]),
-        ["input", "output", "root_qid"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "extract-dump-json",
-            help="Materialize requested Wikidata entity JSON files by scanning the dump directly.",
-        ),
-        dump_extract.build_parser().parse_args([]),
-        ["input", "dump", "output_dir"],
-    )
-    add_arguments(
-        subparsers.add_parser("build-ontology", help="Build ontology PKL from downloaded JSON."),
-        ontology.build_parser().parse_args([]),
-        ["json_dir", "output", "root_qid"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "extract-xeno-canto-ids",
-            help="Extract qid-to-Xeno-canto species ID pairs from ontology PKL.",
-        ),
-        xeno_canto_ids.build_parser().parse_args([]),
-        ["input", "output"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "fetch-xeno-canto-recording-json",
-            help="Fetch and save Xeno-canto API JSON responses per species.",
-        ),
-        xeno_canto_audio.build_api_recordings_parser().parse_args([]),
-        ["input", "output_dir", "api_key", "per_page", "max_pages", "sleep_seconds"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "extract-xeno-canto-recording-ids",
-            help="Extract recording IDs from saved Xeno-canto API JSON files.",
-        ),
-        xeno_canto_audio.build_recording_map_parser().parse_args([]),
-        ["input", "output_json"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "fetch-xeno-canto-audio",
-            help="Download Xeno-canto audio files into per-QID raw directories.",
-        ),
-        xeno_canto_audio.build_audio_parser().parse_args([]),
-        ["input", "output_dir", "limit_per_qid", "clip_seconds", "sleep_seconds"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "build-audio-embeddings",
-            help="Build wav2vec2-based embeddings from a directory tree of audio files.",
-        ),
-        audio_embeddings.build_parser().parse_args([]),
-        [
-            "backend",
-            "input_dir",
-            "output_dir",
-            "model_name",
-            "device",
-            "batch_size",
-            "max_seconds",
-            "target_sample_rate",
-            "extensions",
-            "cache_dir",
-        ],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "download-audio-models",
-            help="Download and cache audio embedding model assets.",
-        ),
-        audio_embeddings.build_download_parser().parse_args([]),
-        ["backend", "model_name", "device", "cache_dir"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "finetune-wav2vec2-crossval",
-            help="Fine-tune wav2vec2 audio classifiers across cross-validation folds.",
-        ),
-        audio_finetuning.build_parser().parse_args([]),
-        [
-            "input_dir",
-            "recording_map",
-            "output_dir",
-            "model_name",
-            "cache_dir",
-            "device",
-            "num_folds",
-            "num_epochs",
-            "batch_size",
-            "eval_batch_size",
-            "learning_rate",
-            "weight_decay",
-            "max_seconds",
-            "freeze_feature_encoder",
-            "extensions",
-            "seed",
-        ],
-    )
-    add_arguments(
-        subparsers.add_parser("build-graph", help="Build taxonomy graph PKL from ontology PKL."),
-        graph.build_parser().parse_args([]),
-        ["input", "output", "root_qid"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "build-sqlite",
-            help="Build a lightweight SQLite DB from ontology PKL.",
-        ),
-        sqlite_store.build_parser().parse_args([]),
-        ["input", "output", "root_qid"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "build-embeddings",
-            help="Build graph embeddings from a taxonomy graph PKL.",
-        ),
-        embeddings.build_parser().parse_args([]),
-        [
-            "input",
-            "output_dir",
-            "algorithm",
-            "dim",
-            "proj_dim",
-            "seed",
-            "initial_features",
-            "walk_length",
-            "num_walks",
-            "window_size",
-            "negative_samples",
-            "transe_negative_samples",
-            "epochs",
-            "learning_rate",
-            "p",
-            "q",
-            "undirected",
-            "layers",
-            "residual",
-            "tau",
-            "drop_edge_rate_1",
-            "drop_edge_rate_2",
-            "drop_feature_rate_1",
-            "drop_feature_rate_2",
-            "batch_size",
-            "grace_encoder",
-            "device",
-            "weight_decay",
-            "p_norm",
-            "graphsage_num_neighbors_1",
-            "graphsage_num_neighbors_2",
-            "root_qid",
-        ],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "build-language-surface-manifest",
-            help="Build per-language surface_id-to-text manifests from bird ontology PKL.",
-        ),
-        language_embeddings.build_parser().parse_args([]),
-        ["input", "output_dir"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "build-language-embeddings",
-            help="Build BERT-based language embeddings from bird ontology PKL.",
-        ),
-        language_embeddings.build_embeddings_parser().parse_args([]),
-        ["input", "output_dir", "english_model", "japanese_model", "batch_size", "max_length", "device"],
-    )
-    subparsers.add_parser(
-        "check-gpu",
-        help="Print a small CUDA / torch environment report.",
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "serve-graph",
-            help="Serve an interactive Dash Cytoscape viewer for the taxonomy graph.",
-        ),
-        graph_dash.build_parser().parse_args([]),
-        ["input", "root_qid", "max_depth", "max_nodes", "host", "port", "debug"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "evaluate-graph-embeddings",
-            help="Evaluate graph embeddings with clustering metrics and write a report.",
-        ),
-        graph_evaluation.build_parser().parse_args([]),
-        ["graph_input", "embeddings_root", "output_root", "label_field", "methods", "seed", "silhouette_sample_size"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "build-wikipedia-manifest",
-            help="Build a TSV manifest for related English and Japanese Wikipedia articles.",
-        ),
-        wikipedia_articles.build_parser().parse_args(["build-wikipedia-manifest"]),
-        ["json_dir", "output", "xml_en_dir", "xml_ja_dir", "text_en_dir", "text_ja_dir"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "fetch-wikipedia-xml",
-            help="Fetch English and Japanese Wikipedia article XML files.",
-        ),
-        wikipedia_articles.build_parser().parse_args(["fetch-wikipedia-xml"]),
-        ["manifest"],
-    )
-    add_arguments(
-        subparsers.add_parser(
-            "extract-wikipedia-text",
-            help="Extract plain text sentences from saved Wikipedia XML files.",
-        ),
-        wikipedia_articles.build_parser().parse_args(["extract-wikipedia-text"]),
-        ["manifest"],
-    )
+    for command, spec in COMMAND_SPECS.items():
+        subparsers.add_parser(command, help=spec.help, add_help=False)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Dispatch one CLI command to the matching module. / CLI コマンドを対応するモジュールへ振り分ける。"""
+    """Dispatch to the selected subcommand with lazy imports. / 遅延 import で対象サブコマンドへ委譲する。"""
 
-    args = build_parser().parse_args(argv)
-    handlers: dict[str, tuple[Callable[[list[str] | None], int], list[str], list[str]]] = {
-        "extract-qids": (qids.main, [], ["input", "output", "root_qid"]),
-        "extract-dump-json": (dump_extract.main, [], ["input", "dump", "output_dir"]),
-        "build-ontology": (ontology.main, [], ["json_dir", "output", "root_qid"]),
-        "extract-xeno-canto-ids": (xeno_canto_ids.main, [], ["input", "output"]),
-        "fetch-xeno-canto-recording-json": (
-            xeno_canto_audio.main_api_recordings,
-            [],
-            ["input", "output_dir", "api_key", "per_page", "max_pages", "sleep_seconds"],
-        ),
-        "extract-xeno-canto-recording-ids": (
-            xeno_canto_audio.main_recording_map,
-            [],
-            ["input", "output_json"],
-        ),
-        "fetch-xeno-canto-audio": (
-            xeno_canto_audio.main,
-            [],
-            ["input", "output_dir", "limit_per_qid", "clip_seconds", "sleep_seconds"],
-        ),
-        "build-audio-embeddings": (
-            audio_embeddings.main,
-            [],
-            [
-                "backend",
-                "input_dir",
-                "output_dir",
-                "model_name",
-                "device",
-                "batch_size",
-                "max_seconds",
-                "target_sample_rate",
-                "extensions",
-                "cache_dir",
-            ],
-        ),
-        "download-audio-models": (
-            audio_embeddings.main_download,
-            [],
-            ["backend", "model_name", "device", "cache_dir"],
-        ),
-        "finetune-wav2vec2-crossval": (
-            audio_finetuning.main,
-            [],
-            [
-                "input_dir",
-                "recording_map",
-                "output_dir",
-                "model_name",
-                "cache_dir",
-                "device",
-                "num_folds",
-                "num_epochs",
-                "batch_size",
-                "eval_batch_size",
-                "learning_rate",
-                "weight_decay",
-                "max_seconds",
-                "freeze_feature_encoder",
-                "extensions",
-                "seed",
-            ],
-        ),
-        "build-graph": (graph.main, [], ["input", "output", "root_qid"]),
-        "build-sqlite": (sqlite_store.main, [], ["input", "output", "root_qid"]),
-        "build-embeddings": (
-            embeddings.main,
-            [],
-            [
-                "input",
-                "output_dir",
-                "algorithm",
-                "dim",
-                "proj_dim",
-                "seed",
-                "initial_features",
-                "walk_length",
-                "num_walks",
-                "window_size",
-                "negative_samples",
-                "transe_negative_samples",
-                "epochs",
-                "learning_rate",
-                "p",
-                "q",
-                "undirected",
-                "layers",
-                "residual",
-                "tau",
-                "drop_edge_rate_1",
-                "drop_edge_rate_2",
-                "drop_feature_rate_1",
-                "drop_feature_rate_2",
-                "batch_size",
-                "grace_encoder",
-                "device",
-                "weight_decay",
-                "p_norm",
-                "graphsage_num_neighbors_1",
-                "graphsage_num_neighbors_2",
-                "root_qid",
-            ],
-        ),
-        "build-language-surface-manifest": (
-            language_embeddings.main,
-            [],
-            ["input", "output_dir"],
-        ),
-        "build-language-embeddings": (
-            language_embeddings.main_embeddings,
-            [],
-            ["input", "output_dir", "english_model", "japanese_model", "batch_size", "max_length", "device"],
-        ),
-        "check-gpu": (print_cuda_report, [], []),
-        "serve-graph": (
-            graph_dash.main,
-            [],
-            ["input", "root_qid", "max_depth", "max_nodes", "host", "port", "debug"],
-        ),
-        "evaluate-graph-embeddings": (
-            graph_evaluation.main,
-            [],
-            ["graph_input", "embeddings_root", "output_root", "label_field", "methods", "seed", "silhouette_sample_size"],
-        ),
-        "build-wikipedia-manifest": (
-            wikipedia_articles.main,
-            ["build-wikipedia-manifest"],
-            ["json_dir", "output", "xml_en_dir", "xml_ja_dir", "text_en_dir", "text_ja_dir"],
-        ),
-        "fetch-wikipedia-xml": (wikipedia_articles.main, ["fetch-wikipedia-xml"], ["manifest"]),
-        "extract-wikipedia-text": (wikipedia_articles.main, ["extract-wikipedia-text"], ["manifest"]),
-    }
-    handler, prefix, names = handlers[args.command]
-    return handler(prefix + namespace_to_args(args, names))
+    args, remaining = build_parser().parse_known_args(argv)
+    spec = COMMAND_SPECS[args.command]
+    handler = _load_handler(spec)
+    forwarded_args = list(spec.argv_prefix) + list(remaining)
+    return handler(forwarded_args)
 
 
 if __name__ == "__main__":
