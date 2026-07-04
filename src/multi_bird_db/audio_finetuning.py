@@ -96,7 +96,7 @@ class AudioClassificationCollator:
                 target_sample_rate=self.sample_rate,
                 max_seconds=self.max_seconds,
             )
-            waveforms.append(waveform.detach().cpu().numpy())
+            waveforms.append(np.asarray(waveform, dtype=np.float32))
             labels.append(self.label2id[item.qid])
         inputs = self.feature_extractor(
             waveforms,

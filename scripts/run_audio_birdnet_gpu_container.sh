@@ -4,10 +4,10 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 
-image_tag="${AUDIO_GPU_IMAGE_TAG:-multi-bird-db/audio-gpu:local}"
-base_image="${AUDIO_GPU_BASE_IMAGE:-nvcr.io/nvidia/tensorflow:25.02-tf2-py3-igpu}"
-dockerfile_path="${AUDIO_GPU_DOCKERFILE:-Dockerfile.audio-gpu}"
-build_mode="${AUDIO_GPU_BUILD:-auto}"
+image_tag="${AUDIO_BIRDNET_GPU_IMAGE_TAG:-multi-bird-db/audio-birdnet-gpu:local}"
+base_image="${AUDIO_BIRDNET_GPU_BASE_IMAGE:-nvcr.io/nvidia/tensorflow:25.02-tf2-py3}"
+dockerfile_path="${AUDIO_BIRDNET_GPU_DOCKERFILE:-Dockerfile.audio-birdnet-gpu}"
+build_mode="${AUDIO_BIRDNET_GPU_BUILD:-auto}"
 
 build_image() {
   docker build \

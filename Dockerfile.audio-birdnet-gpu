@@ -1,8 +1,9 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/tensorflow:25.02-tf2-py3-igpu
+ARG BASE_IMAGE=nvcr.io/nvidia/tensorflow:25.02-tf2-py3
 FROM ${BASE_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/workspace/data/external/models/audio/huggingface \
@@ -11,15 +12,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
 WORKDIR /workspace
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg libsndfile1 git \
+    && apt-get install -y --no-install-recommends ffmpeg libsndfile1 git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README*.md Makefile /workspace/
 COPY src /workspace/src
 
-RUN python3 -m pip install --upgrade pip setuptools wheel \
-    && printf 'tensorflow==2.17.0+nv25.2\n' >/tmp/tf-constraints.txt \
-    && python3 -m pip install -c /tmp/tf-constraints.txt -e '.[audio-birdnet,audio-perch]' \
-    && rm -f /tmp/tf-constraints.txt
+RUN python3 -m pip install --upgrade pip \
+    && python3 -m pip install birdnet==0.2.16 tensorflow-hub==0.16.1 soundfile \
+    && python3 -m pip install -e .
 
 CMD ["bash"]

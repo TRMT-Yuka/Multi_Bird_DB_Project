@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -60,7 +60,7 @@ class AudioEmbeddingTests(unittest.TestCase):
                 self.last_device = None
                 self.last_batch_size = None
 
-            def encode_arrays(self, items, *, device, batch_size):
+            def encode_arrays(self, items, *, device, batch_size, **kwargs):
                 self.last_device = device
                 self.last_batch_size = batch_size
                 return FakeEncodingResult()
@@ -71,7 +71,33 @@ class AudioEmbeddingTests(unittest.TestCase):
         matrix = encoder.encode_batch([FakeWaveform([0.0, 1.0]), FakeWaveform([2.0, 3.0])])
         np.testing.assert_allclose(matrix, np.asarray([[1.0, 2.0], [4.0, 5.0]], dtype=np.float32))
         self.assertEqual(fake_model.last_device, "GPU:0")
-        self.assertEqual(fake_model.last_batch_size, 2)
+        self.assertEqual(fake_model.last_batch_size, 1)
+
+    def test_birdnet_gpu_path_forces_spawn_and_single_worker(self) -> None:
+        class FakeBirdNETModel:
+            def __init__(self):
+                self.last_kwargs = None
+
+            def encode_arrays(self, items, **kwargs):
+                self.last_kwargs = kwargs
+                return np.asarray([[1.0, 2.0]], dtype=np.float32)
+
+        fake_model = FakeBirdNETModel()
+        with (
+            mock.patch.object(audio_embeddings, "birdnet_gpu_available", return_value=True),
+            mock.patch.object(audio_embeddings.mp, "get_start_method", return_value=None),
+            mock.patch.object(audio_embeddings.mp, "set_start_method") as mock_set_start_method,
+        ):
+            encoder = audio_embeddings.BirdNETAudioEncoder(backend="auto", device="cuda", model=fake_model)
+            matrix = encoder.encode_batch([np.asarray([0.0, 1.0], dtype=np.float32)])
+
+        np.testing.assert_allclose(matrix, np.asarray([[1.0, 2.0]], dtype=np.float32))
+        mock_set_start_method.assert_called_once_with("spawn", force=True)
+        assert fake_model.last_kwargs is not None
+        self.assertEqual(fake_model.last_kwargs["device"], "GPU:0")
+        self.assertEqual(fake_model.last_kwargs["batch_size"], 1)
+        self.assertEqual(fake_model.last_kwargs["n_workers"], 1)
+        self.assertEqual(fake_model.last_kwargs["n_producers"], 1)
 
     def test_discover_and_embed_audio_tree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -98,9 +124,9 @@ class AudioEmbeddingTests(unittest.TestCase):
                         rows.append(
                             np.array(
                                 [
-                                    float(waveform.numel()),
-                                    float(waveform[:1].item() if waveform.numel() else 0.0),
-                                    float(waveform.mean().item() if waveform.numel() else 0.0),
+                                    float(waveform.shape[0]),
+                                    float(waveform[0] if waveform.shape[0] else 0.0),
+                                    float(np.mean(waveform) if waveform.shape[0] else 0.0),
                                 ],
                                 dtype=np.float32,
                             )
@@ -141,6 +167,7 @@ class AudioEmbeddingTests(unittest.TestCase):
             self.assertEqual(result["summary"]["item_count"], 2)
             self.assertEqual(result["summary"]["failed_count"], 0)
             self.assertEqual(len(decoded_lengths), 2)
+            self.assertEqual(result["store"].metadata["decoder"], "ffmpeg_or_custom_loader")
 
             manifest_rows = result["manifest_rows"]
             self.assertEqual(len(manifest_rows), 2)
@@ -174,8 +201,8 @@ class AudioEmbeddingTests(unittest.TestCase):
                             np.array(
                                 [
                                     float(index),
-                                    float(waveform.numel()),
-                                    float(waveform.mean().item()),
+                                    float(waveform.shape[0]),
+                                    float(np.mean(waveform)),
                                 ],
                                 dtype=np.float32,
                             )
@@ -238,9 +265,9 @@ class AudioEmbeddingTests(unittest.TestCase):
                             np.array(
                                 [
                                     float(index),
-                                    float(waveform.numel()),
-                                    float(waveform.mean().item()),
-                                    float(waveform[-1].item()),
+                                    float(waveform.shape[0]),
+                                    float(np.mean(waveform)),
+                                    float(waveform[-1]),
                                 ],
                                 dtype=np.float32,
                             )

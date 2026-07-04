@@ -4,6 +4,7 @@ import argparse
 import csv
 import io
 import json
+import multiprocessing as mp
 import os
 import re
 import shutil
@@ -303,7 +304,7 @@ def build_audio_id(path: Path, qid: str, input_dir: Path) -> str:
     return f"{qid}_{suffix}"
 
 
-def _load_with_ffmpeg(path: Path, target_sample_rate: int, max_seconds: float | None) -> tuple["torch.Tensor", int]:
+def _load_with_ffmpeg(path: Path, target_sample_rate: int, max_seconds: float | None) -> tuple[np.ndarray, int]:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError("ffmpeg is not available.")
@@ -338,14 +339,47 @@ def _load_with_ffmpeg(path: Path, target_sample_rate: int, max_seconds: float | 
         stderr = proc.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"ffmpeg failed to decode {path}: {stderr}")
 
-    import torch
-
     with wave.open(io.BytesIO(proc.stdout), "rb") as wav_file:
         sample_rate = wav_file.getframerate()
         frame_count = wav_file.getnframes()
         pcm_bytes = wav_file.readframes(frame_count)
     pcm = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-    return torch.from_numpy(pcm.copy()), sample_rate
+    return np.ascontiguousarray(pcm), sample_rate
+
+
+def _normalize_waveform_array(waveform: Any) -> np.ndarray:
+    if hasattr(waveform, "detach"):
+        waveform = waveform.detach()
+    if hasattr(waveform, "cpu"):
+        waveform = waveform.cpu()
+    if hasattr(waveform, "numpy"):
+        waveform = waveform.numpy()
+
+    waveform_array = np.asarray(waveform, dtype=np.float32)
+    if waveform_array.ndim == 2:
+        waveform_array = waveform_array.mean(axis=0)
+    elif waveform_array.ndim != 1:
+        waveform_array = waveform_array.reshape(-1)
+    return np.ascontiguousarray(waveform_array.astype(np.float32, copy=False))
+
+
+def _resample_waveform_array(waveform: np.ndarray, source_sample_rate: int, target_sample_rate: int) -> np.ndarray:
+    if source_sample_rate <= 0 or target_sample_rate <= 0:
+        raise ValueError("Sample rates must be positive.")
+    if source_sample_rate == target_sample_rate:
+        return np.ascontiguousarray(waveform.astype(np.float32, copy=False))
+    if waveform.size == 0:
+        return np.zeros(0, dtype=np.float32)
+
+    duration_seconds = waveform.shape[0] / float(source_sample_rate)
+    target_length = max(int(round(duration_seconds * target_sample_rate)), 1)
+    if waveform.shape[0] == 1:
+        return np.full(target_length, float(waveform[0]), dtype=np.float32)
+
+    source_positions = np.linspace(0.0, duration_seconds, num=waveform.shape[0], endpoint=False, dtype=np.float64)
+    target_positions = np.linspace(0.0, duration_seconds, num=target_length, endpoint=False, dtype=np.float64)
+    resampled = np.interp(target_positions, source_positions, waveform.astype(np.float64, copy=False))
+    return np.ascontiguousarray(resampled.astype(np.float32, copy=False))
 
 
 def load_audio_file(
@@ -353,52 +387,24 @@ def load_audio_file(
     target_sample_rate: int,
     max_seconds: float | None = None,
     audio_loader: Callable[[Path], tuple[Any, int]] | None = None,
-) -> tuple["torch.Tensor", int]:
+) -> tuple[np.ndarray, int]:
     """Load and resample one audio file. / 1 件の音声を読み込み、必要ならリサンプルする。"""
-
-    import torch
 
     waveform: Any
     sample_rate: int
     if audio_loader is not None:
         waveform, sample_rate = audio_loader(path)
-    else:
-        try:
-            import torchaudio
-
-            waveform, sample_rate = torchaudio.load(str(path))
-        except Exception:
-            waveform, sample_rate = _load_with_ffmpeg(path, target_sample_rate=target_sample_rate, max_seconds=max_seconds)
-
-    if isinstance(waveform, np.ndarray):
-        waveform_tensor = torch.from_numpy(waveform)
-    else:
-        waveform_tensor = waveform
-    if not isinstance(waveform_tensor, torch.Tensor):
-        waveform_tensor = torch.as_tensor(waveform_tensor)
-    waveform_tensor = waveform_tensor.detach().cpu().float()
-    if waveform_tensor.ndim == 2:
-        waveform_tensor = waveform_tensor.mean(dim=0)
-    elif waveform_tensor.ndim != 1:
-        waveform_tensor = waveform_tensor.reshape(-1)
-
-    if max_seconds is not None and max_seconds > 0:
-        max_frames = int(round(sample_rate * max_seconds))
-        if waveform_tensor.numel() > max_frames:
-            waveform_tensor = waveform_tensor[:max_frames]
-
-    if sample_rate != target_sample_rate:
-        try:
-            import torchaudio.functional as F
-
-            waveform_tensor = F.resample(waveform_tensor.unsqueeze(0), sample_rate, target_sample_rate).squeeze(0)
+        waveform_array = _normalize_waveform_array(waveform)
+        if max_seconds is not None and max_seconds > 0:
+            max_frames = int(round(sample_rate * max_seconds))
+            if waveform_array.shape[0] > max_frames:
+                waveform_array = waveform_array[:max_frames]
+        if sample_rate != target_sample_rate:
+            waveform_array = _resample_waveform_array(waveform_array, sample_rate, target_sample_rate)
             sample_rate = target_sample_rate
-        except Exception as exc:
-            raise RuntimeError(
-                f"Audio file {path} has sample rate {sample_rate}, but resampling to {target_sample_rate} failed."
-            ) from exc
+        return np.ascontiguousarray(waveform_array.astype(np.float32, copy=False)), sample_rate
 
-    return waveform_tensor.contiguous(), sample_rate
+    return _load_with_ffmpeg(path, target_sample_rate=target_sample_rate, max_seconds=max_seconds)
 
 
 @dataclass(slots=True)
@@ -427,13 +433,12 @@ def _save_audio_embedding_store(store: AudioEmbeddingStore, output_dir: Path) ->
     _write_json_atomic(output_dir / "metadata.json", store.metadata)
 
 
-def _waveform_to_wav_bytes(waveform: "torch.Tensor", sample_rate: int) -> bytes:
+def _waveform_to_wav_bytes(waveform: np.ndarray, sample_rate: int) -> bytes:
     """Serialize one mono waveform to 16-bit WAV bytes. / 1 本の mono 波形を 16bit WAV にする。"""
 
-    import torch
-
-    waveform = waveform.detach().cpu().float().flatten().clamp(-1.0, 1.0)
-    pcm = (waveform * 32767.0).to(torch.int16).numpy()
+    waveform_array = np.asarray(waveform, dtype=np.float32).reshape(-1)
+    waveform_array = np.clip(waveform_array, -1.0, 1.0)
+    pcm = np.asarray(np.round(waveform_array * 32767.0), dtype=np.int16)
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
         temp_path = Path(handle.name)
     try:
@@ -539,6 +544,21 @@ def resolve_birdnet_runtime(requested_device: str, requested_backend: str = DEFA
     return (DEFAULT_BIRDNET_CPU_BACKEND if normalized_backend == "auto" else normalized_backend, "CPU")
 
 
+def _ensure_spawn_start_method_for_birdnet_gpu(runtime_device: str) -> None:
+    """Avoid CUDA+fork failures in BirdNET GPU workers by forcing spawn."""
+
+    if not str(runtime_device).startswith("GPU"):
+        return
+    current = mp.get_start_method(allow_none=True)
+    if current in {None, "spawn"}:
+        mp.set_start_method("spawn", force=True)
+        return
+    raise RuntimeError(
+        f"BirdNET GPU embeddings require multiprocessing start method 'spawn', but found '{current}'. "
+        "Start a fresh Python process and retry."
+    )
+
+
 class Wav2Vec2AudioEncoder:
     """Encode waveforms using a Hugging Face wav2vec2 model. / Hugging Face の wav2vec2 で埋め込む。"""
 
@@ -555,11 +575,11 @@ class Wav2Vec2AudioEncoder:
         self.model.to(self.device)
         self.sample_rate = int(getattr(self.feature_extractor, "sampling_rate", DEFAULT_TARGET_SAMPLE_RATE))
 
-    def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
+    def encode_batch(self, waveforms: list[np.ndarray]) -> np.ndarray:
         import torch
 
         inputs = self.feature_extractor(
-            [waveform.detach().cpu().numpy() for waveform in waveforms],
+            [np.asarray(waveform, dtype=np.float32) for waveform in waveforms],
             sampling_rate=self.sample_rate,
             return_tensors="pt",
             padding=True,
@@ -602,6 +622,7 @@ class BirdNETAudioEncoder:
         self.requested_backend = backend
         self.requested_device = device
         self.backend, self.runtime_device = resolve_birdnet_runtime(device, backend)
+        _ensure_spawn_start_method_for_birdnet_gpu(self.runtime_device)
         self.device = "cuda" if self.runtime_device.startswith("GPU") else "cpu"
         self.sample_rate = DEFAULT_BIRDNET_SAMPLE_RATE
         self.model = model if model is not None else birdnet.load(model_type, model_version, self.backend)
@@ -626,18 +647,21 @@ class BirdNETAudioEncoder:
             encoded_array = encoded_array.mean(axis=1)
         return _coerce_embedding_matrix(encoded_array, expected_rows=expected_rows)
 
-    def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
+    def encode_batch(self, waveforms: list[np.ndarray]) -> np.ndarray:
         items = [
             (
-                waveform.detach().cpu().numpy().reshape(-1).astype(np.float32, copy=False),
+                _normalize_waveform_array(waveform).reshape(-1).astype(np.float32, copy=False),
                 self.sample_rate,
             )
             for waveform in waveforms
         ]
+        use_gpu = self.runtime_device.startswith("GPU")
         encoded = self.model.encode_arrays(
             items,
             device=self.runtime_device,
-            batch_size=max(1, len(items)),
+            batch_size=1 if use_gpu else max(1, len(items)),
+            n_workers=1 if use_gpu else None,
+            n_producers=1,
         )
         return self._coerce_result_rows(encoded, expected_rows=len(items))
 
@@ -679,12 +703,12 @@ class PerchAudioEncoder:
             return self.model.generate_embeddings(audio_paths)
         raise RuntimeError("Perch model does not expose embed() or generate_embeddings().")
 
-    def encode_batch(self, waveforms: list["torch.Tensor"]) -> np.ndarray:
+    def encode_batch(self, waveforms: list[np.ndarray]) -> np.ndarray:
         with tempfile.TemporaryDirectory(prefix="perch_embed_") as tmpdir:
             temp_paths: list[str] = []
             for index, waveform in enumerate(waveforms):
                 temp_path = Path(tmpdir) / f"window_{index:04d}.wav"
-                temp_path.write_bytes(_waveform_to_wav_bytes(waveform, self.sample_rate))
+                temp_path.write_bytes(_waveform_to_wav_bytes(_normalize_waveform_array(waveform), self.sample_rate))
                 temp_paths.append(str(temp_path))
             encoded = self._call_model(temp_paths)
         return _coerce_embedding_matrix(encoded, expected_rows=len(waveforms))
@@ -737,8 +761,6 @@ def build_audio_embeddings(
     resume_existing: bool = False,
 ) -> dict[str, Any]:
     """Build audio embeddings for all files under one directory tree. / ディレクトリ配下の音声埋め込みを作る。"""
-
-    import torch
 
     backend_spec = get_audio_backend_spec(backend)
 
@@ -809,7 +831,7 @@ def build_audio_embeddings(
     qids: list[str] = []
     embedding_rows: list[np.ndarray] = []
 
-    pending_waveforms: list[torch.Tensor] = []
+    pending_waveforms: list[np.ndarray] = []
     pending_rows: list[dict[str, str]] = []
     total_files = len(files)
     processed_files = 0
@@ -899,7 +921,14 @@ def build_audio_embeddings(
             continue
 
         if backend_spec.window_seconds is None:
-            windows = [AudioWindow(index=0, start_seconds=0.0, end_seconds=float(waveform.numel()) / float(sample_rate), waveform=waveform)]
+            windows = [
+                AudioWindow(
+                    index=0,
+                    start_seconds=0.0,
+                    end_seconds=float(waveform.shape[0]) / float(sample_rate),
+                    waveform=waveform,
+                )
+            ]
         else:
             windows = segment_waveform(
                 waveform,
@@ -926,7 +955,7 @@ def build_audio_embeddings(
                 append_reused_item(existing_items[item_audio_id])
                 continue
 
-            duration_seconds = float(window.waveform.numel()) / float(sample_rate or decode_sample_rate)
+            duration_seconds = float(window.waveform.shape[0]) / float(sample_rate or decode_sample_rate)
             pending_waveforms.append(window.waveform)
             pending_rows.append(
                 {
@@ -940,7 +969,7 @@ def build_audio_embeddings(
                     "window_seconds": window_seconds,
                     "file_type": path.suffix.lower().lstrip("."),
                     "sample_rate": str(sample_rate),
-                    "num_samples": str(int(window.waveform.numel())),
+                    "num_samples": str(int(window.waveform.shape[0])),
                     "duration_seconds": f"{duration_seconds:.6f}",
                 }
             )
@@ -994,7 +1023,7 @@ def build_audio_embeddings(
             "unique_qid_count": len(set(qids)),
             "file_extension_whitelist": list(extensions),
             "failed_count": len(failed_rows),
-            "decoder": "torchaudio_or_ffmpeg",
+            "decoder": "ffmpeg_or_custom_loader",
             "resume_existing": resume_existing,
             "reused_item_count": reused_item_count,
             "new_item_count": new_item_count,

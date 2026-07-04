@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import unittest
 
+import numpy as np
+
 from multi_bird_db.audio_backends import get_audio_backend_spec, list_audio_backends
 from multi_bird_db.audio_windows import segment_waveform
-
-import torch
 
 
 class AudioBackendSpecTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class AudioBackendSpecTests(unittest.TestCase):
         self.assertEqual(perch.embedding_scope, "window")
 
     def test_segment_waveform(self) -> None:
-        waveform = torch.arange(10, dtype=torch.float32)
+        waveform = np.arange(10, dtype=np.float32)
         windows = segment_waveform(waveform, sample_rate=2, window_seconds=3.0, overlap_seconds=1.0)
         self.assertGreaterEqual(len(windows), 1)
         self.assertEqual(windows[0].index, 0)

@@ -1,76 +1,100 @@
 # README_Docker
 
-BirdNET と Perch の GPU 実行だけを、ホストの `.venv_BirdDB` とは別の Docker 環境へ分離するための手順です。
+BirdNET と Perch の GPU 実行を、ホストの `.venv_BirdDB` とは別の Docker 環境へ分離するための手順です。
 
 ## 含めるもの
 
 - `Dockerfile.audio-gpu`
+- `Dockerfile.audio-birdnet-gpu`
 - `.dockerignore`
 - `scripts/run_audio_gpu_container.sh`
+- `scripts/run_audio_birdnet_gpu_container.sh`
 - `Makefile` の GPU 用ターゲット
 
 この構成では、リポジトリ配下のコードと手順だけを Git 管理します。モデル cache、音声データ、埋め込み結果、pull 済み image は Git に含めません。
 
-## 目的
+## 方針
 
-- `wav2vec2` はホストの `.venv_BirdDB` で継続利用する
-- `BirdNET` と `Perch` のうち、TensorFlow GPU が必要な実行だけを Docker 側へ寄せる
-- 出力先はホスト側の `data/` をそのまま使う
+TensorFlow を `arm64` / `aarch64` Linux 環境で NVIDIA GPU 利用する場合は、原則として NVIDIA NGC の TensorFlow コンテナをベースにします。
 
-## 前提
+- `python:*-slim` ベースに `pip install tensorflow` はしない
+- CUDA / cuDNN / TensorFlow wheel を Dockerfile 内で手動構築しない
+- 先に NGC image 単体で GPU 認識を確認し、通ったタグだけを Dockerfile に固定する
 
-- Docker コマンドが使えること
-- `docker run --gpus all ...` で GPU を見せられること
-- ベース image の pull に認証が必要な場合は、事前にその registry へ login しておくこと
+## このマシンで確認したタグ
 
-## 使うファイル
+2026-07-04 時点では、次の両方で `tf.config.list_physical_devices('GPU')` に `GPU:0` が出ました。
 
-- `Dockerfile.audio-gpu`
-  - TensorFlow GPU 系のベース image 上に、`ffmpeg` と `libsndfile`、`audio-birdnet` / `audio-perch` 依存を入れます
-- `scripts/run_audio_gpu_container.sh`
-  - image build と `docker run --gpus all` を短いコマンドにまとめます
+- `nvcr.io/nvidia/tensorflow:25.02-tf2-py3`
+- `nvcr.io/nvidia/tensorflow:25.02-tf2-py3-igpu`
 
-## 環境変数
+BirdNET 用コンテナでは、まず標準タグの `nvcr.io/nvidia/tensorflow:25.02-tf2-py3` を採用しています。
 
-- `AUDIO_GPU_BASE_IMAGE`
-  - Docker build 時の base image を差し替えるときに使います
-- `AUDIO_GPU_IMAGE_TAG`
-  - ローカル build 後の image tag を差し替えるときに使います
-- `AUDIO_GPU_BUILD`
-  - `auto`、`1`、`0` を使えます
-  - `auto`: image が無ければ build
-  - `1`: 毎回 build
-  - `0`: build をスキップ
+## 事前確認
 
-## 基本コマンド
-
-image を先に build する場合:
+ホスト GPU:
 
 ```bash
-make build-audio-gpu-image
+nvidia-smi
 ```
 
-TensorFlow から GPU が見えるか確認する場合:
+Docker GPU passthrough:
 
 ```bash
-make check-audio-gpu-tensorflow
+docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu24.04 nvidia-smi
 ```
 
-コンテナ shell に入る場合:
+NGC TensorFlow 単体確認:
 
 ```bash
-make run-audio-gpu-shell
+make check-birdnet-ngc-tensorflow-gpu
 ```
 
-BirdNET を GPU で動かす場合:
+直接実行するなら:
+
+```bash
+docker run --rm --gpus all nvcr.io/nvidia/tensorflow:25.02-tf2-py3 \
+  python3 -c "import tensorflow as tf; print(tf.__version__); print(tf.config.list_physical_devices('GPU'))"
+```
+
+## BirdNET 用 GPU コンテナ
+
+BirdNET 用 Dockerfile は `Dockerfile.audio-birdnet-gpu` です。
+
+特徴:
+
+- base image は `nvcr.io/nvidia/tensorflow:25.02-tf2-py3`
+- TensorFlow 自体は NGC 側を使い、`pip install tensorflow` はしない
+- 追加するのは `birdnet==0.2.16`、`tensorflow-hub==0.16.1`、`soundfile` と最小限のシステム依存だけ
+- `birdnet[and-cuda]` は使わない
+  - これは別の TensorFlow / CUDA wheel 群を引き込み、NGC ベースを崩すため
+
+image を build する場合:
+
+```bash
+make build-audio-birdnet-gpu-image
+```
+
+shell に入る場合:
+
+```bash
+make run-audio-birdnet-gpu-shell
+```
+
+BirdNET 埋め込みを実行する場合:
 
 ```bash
 make build-audio-embeddings-birdnet-gpu
 ```
 
-Perch を GPU で動かす場合:
+## 既存の汎用 TensorFlow GPU コンテナ
+
+既存の `Dockerfile.audio-gpu` / `scripts/run_audio_gpu_container.sh` はそのまま残しています。主に Perch 側で使う想定です。
 
 ```bash
+make build-audio-gpu-image
+make check-audio-gpu-tensorflow
+make run-audio-gpu-shell
 make build-audio-embeddings-perch-gpu
 ```
 
@@ -78,5 +102,5 @@ make build-audio-embeddings-perch-gpu
 
 - リポジトリ全体は `/workspace` として mount されます
 - 生成物はホスト側の `data/external/embeddings/audio/` に残ります
-- ベース image を差し替えたい場合は、`AUDIO_GPU_BASE_IMAGE=... make build-audio-gpu-image` のように上書きします
-- 詳細な backend ごとの実行入口は `README_audio.md` を参照してください
+- ベース image を差し替えたい場合は、`AUDIO_BIRDNET_GPU_BASE_IMAGE=... make build-audio-birdnet-gpu-image` のように上書きします
+- BirdNET 自体の ARM64 上の実行安定性は upstream 実装に依存します。コンテナで TensorFlow GPU を見せられても、BirdNET 推論が別途失敗する可能性はあります

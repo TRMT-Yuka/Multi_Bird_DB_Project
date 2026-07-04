@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import torch
+import numpy as np
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,11 +12,11 @@ class AudioWindow:
     index: int
     start_seconds: float
     end_seconds: float
-    waveform: torch.Tensor
+    waveform: np.ndarray
 
 
 def segment_waveform(
-    waveform: torch.Tensor,
+    waveform: np.ndarray,
     sample_rate: int,
     window_seconds: float,
     overlap_seconds: float = 0.0,
@@ -31,29 +31,30 @@ def segment_waveform(
     if overlap_seconds >= window_seconds:
         raise ValueError("overlap_seconds must be smaller than window_seconds")
 
+    waveform_array = np.asarray(waveform, dtype=np.float32).reshape(-1)
     window_size = max(int(round(window_seconds * sample_rate)), 1)
     hop_size = max(int(round((window_seconds - overlap_seconds) * sample_rate)), 1)
-    total_samples = int(waveform.numel())
+    total_samples = int(waveform_array.shape[0])
 
     windows: list[AudioWindow] = []
     start = 0
     index = 0
     while start < total_samples:
         end = min(start + window_size, total_samples)
-        chunk = waveform[start:end]
-        if chunk.numel() < window_size:
-            pad_length = window_size - chunk.numel()
+        chunk = waveform_array[start:end]
+        if chunk.shape[0] < window_size:
+            pad_length = window_size - chunk.shape[0]
             if pad_mode == "noise":
-                padding = torch.randn(pad_length, dtype=chunk.dtype) * 0.005
+                padding = (np.random.standard_normal(pad_length) * 0.005).astype(chunk.dtype, copy=False)
             else:
-                padding = torch.zeros(pad_length, dtype=chunk.dtype)
-            chunk = torch.cat([chunk, padding], dim=0)
+                padding = np.zeros(pad_length, dtype=chunk.dtype)
+            chunk = np.concatenate([chunk, padding], axis=0)
         windows.append(
             AudioWindow(
                 index=index,
                 start_seconds=start / sample_rate,
                 end_seconds=end / sample_rate,
-                waveform=chunk,
+                waveform=np.ascontiguousarray(chunk, dtype=np.float32),
             )
         )
         if end >= total_samples:

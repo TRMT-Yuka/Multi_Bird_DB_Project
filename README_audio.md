@@ -44,7 +44,6 @@ backend ごとの既定:
   - 既定サンプルレート: 16 kHz
   - 目的: ベースライン
   - 必要な Python 系: `torch`, `transformers`
-  - 任意の Python 系: `torchaudio`
   - 必要なシステム系: `ffmpeg`
   - モデル事前取得: `make download-audio-models`
 - `birdnet`
@@ -52,6 +51,7 @@ backend ごとの既定:
   - 既定サンプルレート: 48 kHz
   - 目的: 鳥類特化の基準
   - 必要な Python 系: `birdnet`, `tensorflow`, `tensorflow-hub`, `soundfile`
+  - このコード経路は `torch` 非依存です
   - 必要なシステム系: `ffmpeg`, `libsndfile`
   - 実装状況: 実装済み
   - GPU 実行: Docker 側を推奨
@@ -60,6 +60,7 @@ backend ごとの既定:
   - 既定サンプルレート: 22.05 kHz
   - 目的: Bioacoustics Model Zoo の `Perch2` 埋め込み
   - 必要な Python 系: `bioacoustics-model-zoo`, `tensorflow`, `tensorflow-hub`, `soundfile`
+  - このコード経路は `torch` 非依存ですが、`bioacoustics-model-zoo` / `opensoundscape` の依存として `torch` 系が入ることがあります
   - 必要なシステム系: `ffmpeg`, `libsndfile`
   - 実装状況: 実装済み
   - GPU 実行: Docker 側を推奨
@@ -97,7 +98,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli download-audio-models \
 
 注意:
 
-- この環境では `torchaudio` を前提にせず、音声 decode に `ffmpeg` フォールバックを使うことがあります
+- この実装では共通の音声 decode / resample を `ffmpeg` ベースで処理します
 - `build-audio-embeddings-wav2vec2` の前に、`PATH` を通して `ffmpeg` コマンドを実行可能にしておく必要があります
 
 BirdNET を使う例:
@@ -110,15 +111,15 @@ make build-audio-embeddings-birdnet
 BirdNET を GPU で使う例:
 
 ```bash
-make build-audio-gpu-image
-make check-audio-gpu-tensorflow
+make check-birdnet-ngc-tensorflow-gpu
+make build-audio-birdnet-gpu-image
 make build-audio-embeddings-birdnet-gpu
 ```
 
 補足:
 
 - ホスト側から一発で実行する場合は `make build-audio-embeddings-birdnet-gpu` を使います
-- すでに `make run-audio-gpu-shell` でコンテナ内に入っている場合は、この `make` を重ねず、コンテナ内で `python3 -m multi_bird_db.cli ...` を直接実行してください
+- すでに `make run-audio-birdnet-gpu-shell` でコンテナ内に入っている場合は、この `make` を重ねず、コンテナ内で `python3 -m multi_bird_db.cli ...` を直接実行してください
 
 直接 CLI を叩く場合:
 
