@@ -1,0 +1,21 @@
+# Core project dependencies
+dash
+dash-cytoscape
+matplotlib
+networkx
+numpy
+qwikidata
+
+# Audio / language / graph runtime dependencies used by the current codebase
+pandas
+soundfile
+torch
+transformers
+fugashi
+unidic-lite
+
+# TensorFlow-based audio backends
+tensorflow
+tensorflow-hub
+birdnet
+bioacoustics-model-zoo
