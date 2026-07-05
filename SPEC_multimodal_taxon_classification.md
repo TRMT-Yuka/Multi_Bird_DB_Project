@@ -219,11 +219,112 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 
 - 指定 rank における上位 taxon ラベル
 
-## 9. 実装対象
+## 9. 実装方針
+
+### 9.1 既存コードを壊さない方針
+
+この機能は、既存の `audio_embeddings.py`、`language_embeddings.py`、`embeddings.py` に直接継ぎ足して肥大化させない。  
+既存コードは基本的に「既存生成物を作る責務」に留め、新しいマルチモーダル分類ロジックは別モジュールとして切り出す。
+
+方針:
+
+- 既存の埋め込み生成コードは入力生成器として扱う
+- マルチモーダル分類実験のロジックは新規サブモジュールに分離する
+- 既存ファイルには必要最小限の import / CLI 接続だけを追加する
+- 実験実装の中心ロジックは既存ファイルへ直接書かない
+
+### 9.2 ディレクトリ構成
+
+初期実装では、以下の新規ディレクトリを作る。
+
+```text
+src/multi_bird_db/multimodal/
+```
+
+この配下に、責務ごとにファイルを分ける。
+
+想定構成:
+
+```text
+src/multi_bird_db/multimodal/
+  __init__.py
+  types.py
+  loaders.py
+  labels.py
+  expanders.py
+  splits.py
+  features.py
+  classifiers.py
+  evaluate.py
+  cli.py
+```
+
+### 9.3 各ファイルの責務
+
+- `types.py`
+  - dataclass / 型定義
+  - row manifest / sample manifest / config 型
+- `loaders.py`
+  - graph / audio / language の既存生成物をロードする
+- `labels.py`
+  - `QID` に対して上位 taxon ラベルを付与する
+- `expanders.py`
+  - `QID` 内の複数パタンを直積展開する
+- `splits.py`
+  - `QID` 単位の train / validation / test split を作る
+- `features.py`
+  - モダリティベクトルの連結や前処理を行う
+- `classifiers.py`
+  - 分類器の学習と推論
+- `evaluate.py`
+  - 指標計算、予測出力、レポート生成
+- `cli.py`
+  - 実験実行コマンドの入口
+
+### 9.4 テスト方針
+
+テストも既存テストに混ぜすぎず、専用ファイルで分ける。
+
+想定:
+
+```text
+tests/test_multimodal_loaders.py
+tests/test_multimodal_labels.py
+tests/test_multimodal_expanders.py
+tests/test_multimodal_splits.py
+tests/test_multimodal_features.py
+tests/test_multimodal_classifiers.py
+```
+
+### 9.5 実装順序
+
+初期実装は次の順に進める。
+
+1. `types.py`
+2. `loaders.py`
+3. `labels.py`
+4. `expanders.py`
+5. `splits.py`
+6. `features.py`
+7. `classifiers.py`
+8. `evaluate.py`
+9. `cli.py`
+
+この順にすると、下層のデータ整形とラベル付与を固めてから、学習・評価へ進める。
+
+### 9.6 統合方針
+
+一旦別ディレクトリに分けるが、別リポジトリにはしない。  
+最初から `src/multi_bird_db/` 配下に置くことで、将来の統合コストを下げる。
+
+つまり、方針としては「一旦分けて、そのまま同一パッケージ内で育てる」である。  
+後から既存巨大ファイルへ戻して混ぜることは前提にしない。
+
+## 10. 実装対象
 
 最低限、以下の機能を分離して実装する。
 
-### 9.1 埋め込みロード層
+### 10.1 埋め込みロード層
 
 役割:
 
@@ -240,7 +341,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - audio 埋め込みロード
 - language 埋め込みロード
 
-### 9.2 taxon ラベル生成層
+### 10.2 taxon ラベル生成層
 
 役割:
 
@@ -251,7 +352,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - `QID -> ancestors` 取得
 - `QID + target_rank -> label` 変換
 
-### 9.3 サンプル展開層
+### 10.3 サンプル展開層
 
 役割:
 
@@ -268,7 +369,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - `expand_audio_language`
 - `expand_graph_audio_language`
 
-### 9.4 分割層
+### 10.4 分割層
 
 役割:
 
@@ -280,7 +381,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - `split_qids(...)`
 - `materialize_split_samples(...)`
 
-### 9.5 学習・評価層
+### 10.5 学習・評価層
 
 役割:
 
@@ -293,7 +394,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - linear classifier
 - MLP classifier
 
-## 10. 出力ファイル仕様
+## 11. 出力ファイル仕様
 
 出力先候補:
 
@@ -314,7 +415,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - confusion matrix 図
 - rank ごとの比較図
 
-## 11. 中間生成物
+## 12. 中間生成物
 
 再利用しやすくするため、中間表も保存する。
 
@@ -338,7 +439,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - `target_rank`
 - `target_label`
 
-## 12. 検証項目
+## 13. 検証項目
 
 実装後は少なくとも以下を検証する。
 
@@ -348,7 +449,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - `2 name × 3 audio = 6 samples` のような直積展開が正しいこと
 - 指定 rank の taxon ラベルが一意に振られていること
 
-## 13. 既知の未確定事項
+## 14. 既知の未確定事項
 
 以下は今後決定が必要である。
 
@@ -359,7 +460,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - 欠損モダリティを持つ `QID` をどう扱うか
 - モダリティ次元差の正規化を行うか
 
-## 14. 非目標
+## 15. 非目標
 
 この仕様書の段階では、以下はまだ扱わない。
 
@@ -368,11 +469,11 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - 欠損モダリティ補完
 - retrieval 実験との統合評価
 
-## 15. 初期実装で固定するモデル
+## 16. 初期実装で固定するモデル
 
 この実験系は後で差し替え可能にするが、最初の実装では以下を固定採用する。
 
-### 15.1 graph モダリティ
+### 16.1 graph モダリティ
 
 採用モデル:
 
@@ -389,7 +490,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 
 - `data/external/embeddings/graph/graphsage/<timestamp>/`
 
-### 15.2 audio モダリティ
+### 16.2 audio モダリティ
 
 採用モデル:
 
@@ -411,7 +512,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - 初期実装では、追加学習済み wav2vec2 ではなく、まず既存の `wav2vec2` 埋め込み生成系を基礎として使う
 - 追加学習済みモデルの利用は拡張項目とする
 
-### 15.3 language モダリティ
+### 16.3 language モダリティ
 
 採用モデル:
 
@@ -432,7 +533,7 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - 日本語 `tohoku-nlp/bert-base-japanese-v3` は将来の切替候補として残す
 - 初期実装では language は英語のみ採用する
 
-### 15.4 初期固定構成のまとめ
+### 16.4 初期固定構成のまとめ
 
 最初のマルチモーダル分類実装では、以下の構成を標準構成とする。
 
