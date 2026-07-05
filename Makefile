@@ -3,7 +3,7 @@ PYTHONPATH := src
 EXTRACT_DUMP_JSON_ARGS ?=
 EMBEDDING_ALGORITHM ?= node2vec
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-ngc-tensorflow-gpu build-audio-birdnet-gpu-image run-audio-birdnet-gpu-shell build-audio-embeddings-wav2vec2 finetune-wav2vec2-crossval build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-birdnet-2 build-audio-embeddings-birdnet-2-gpu build-audio-embeddings-perch build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-ngc-tensorflow-gpu build-audio-birdnet-gpu-image run-audio-birdnet-gpu-shell build-audio-embeddings-wav2vec2 finetune-wav2vec2-crossval build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-birdnet-2 build-audio-embeddings-birdnet-2-gpu build-audio-embeddings-perch build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings inspect-multimodal-sources run-multimodal-baseline build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -91,6 +91,12 @@ build-transe-embeddings:
 
 evaluate-graph-embeddings:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli evaluate-graph-embeddings
+
+inspect-multimodal-sources:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli inspect-multimodal-sources
+
+run-multimodal-baseline:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli run-multimodal-baseline
 
 build-language-surface-manifest:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-language-surface-manifest

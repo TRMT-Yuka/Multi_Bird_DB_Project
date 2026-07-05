@@ -163,3 +163,33 @@ PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval \
 
 この章はまだ設計整理の段階です。  
 実際の合同埋め込み生成、学習、分類評価パイプラインはこれから実装します。
+
+
+## マルチモーダル baseline 実装
+
+分離実装は `src/multi_bird_db/multimodal/` 配下に置き、既存の埋め込み生成コードは入力生成器としてそのまま利用します。  
+既存コード本体へ実験ロジックは書き戻さず、CLI 接続だけ追加しています。
+
+現時点の入口:
+
+```bash
+source .venv_BirdDB/bin/activate
+make inspect-multimodal-sources
+make run-multimodal-baseline
+```
+
+直接 CLI を叩く場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli run-multimodal-baseline \
+  --target-rank family \
+  --modalities graph,audio,language
+```
+
+現時点の baseline は以下です。
+
+- 入力元ディレクトリは設定で差し替え可能
+- `QID` 単位で split してから、split 内で `graph × audio × language` を直積展開
+- ベクトル結合は単純 concat
+- 分類器は新規依存を増やさない `numpy` ベース softmax linear classifier
+- 出力先は `data/external/experiments/multimodal_taxon_classification/<timestamp>/`

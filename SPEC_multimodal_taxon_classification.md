@@ -233,6 +233,14 @@ train / validation / test の分割は、サンプル単位ではなく `QID` �
 - 既存ファイルには必要最小限の import / CLI 接続だけを追加する
 - 実験実装の中心ロジックは既存ファイルへ直接書かない
 
+追加ルール:
+
+- 実装は一旦、既存コードとは切り分けて進める
+- ただし最終的な統合を見据え、既存コードで再利用できる読み出し処理や保存形式は極力そのまま利用する
+- 再利用は「既存コードを読む・呼ぶ」形に限る
+- この実験のために既存コード本体を書き換えることはしない
+- 影響範囲は `multimodal` 実験用モジュール内に閉じる
+
 ### 9.2 ディレクトリ構成
 
 初期実装では、以下の新規ディレクトリを作る。
@@ -266,6 +274,7 @@ src/multi_bird_db/multimodal/
   - row manifest / sample manifest / config 型
 - `loaders.py`
   - graph / audio / language の既存生成物をロードする
+  - 入力元ディレクトリを設定で差し替え可能にする
 - `labels.py`
   - `QID` に対して上位 taxon ラベルを付与する
 - `expanders.py`
@@ -331,10 +340,6 @@ tests/test_multimodal_classifiers.py
 - graph / audio / language の各埋め込みをロードする
 - 行ごとの `QID` とベクトルを対応付ける
 
-想定モジュール:
-
-- `src/multi_bird_db/multimodal_embeddings.py`
-
 必要関数:
 
 - graph 埋め込みロード
@@ -393,6 +398,11 @@ tests/test_multimodal_classifiers.py
 - logistic regression
 - linear classifier
 - MLP classifier
+
+初期ベースライン:
+
+- 新規依存を増やさず、`numpy` のみで動く softmax linear classifier を最初の基準実装にする
+- 高機能分類器への差し替えは、その上に追加する
 
 ## 11. 出力ファイル仕様
 
