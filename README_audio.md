@@ -1,6 +1,6 @@
 # README_audio
 
-`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はホストの `.venv_BirdDB`、BirdNET の GPU 実行はこのリポジトリ内の Docker 環境を前提に整理します。Perch はこのマシンでは追わず、別マシン・別環境で実行して生成物だけを戻す前提にします。
+`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はホストの `.venv_BirdDB`、BirdNET の GPU 実行はこのリポジトリ内の Docker 環境を前提に整理します。Perch はこのマシンでは追わず、別マシン・別環境で実行して生成物だけを戻す前提にします。追加学習と実験手順は [README_experiments.md](README_experiments.md) に分離しています。
 
 ## 概要
 
@@ -227,41 +227,9 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 - `summary.json`
 - `failed_items.json`
 
-## wav2vec2 fine-tuning
+## 追加学習と実験
 
-`data/raw/xeno-canto/` 配下の音声を使い、`Q...` ディレクトリ名を鳥類ラベルとして `wav2vec2` を教師あり fine-tuning できます。
-`recording_map.json` の `recording_ids` と音声ファイル名を対応付け、5 分割 cross-validation で `wav2vec2-model_0` から `wav2vec2-model_4` を作成します。
-
-実行コマンド:
-
-```bash
-source .venv_BirdDB/bin/activate
-make finetune-wav2vec2-crossval
-```
-
-直接 CLI を叩く場合:
-
-```bash
-PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval \
-  --input-dir data/raw/xeno-canto \
-  --recording-map data/interim/xeno-canto/recording_map.json \
-  --output-dir data/external/models/audio/wav2vec2-finetuned \
-  --model-name facebook/wav2vec2-base-960h \
-  --device cuda \
-  --num-folds 5 \
-  --num-epochs 3
-```
-
-出力先:
-
-- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_0/`
-- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_1/`
-- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_2/`
-- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_3/`
-- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_4/`
-
-各 fold には `train_manifest.tsv`、`test_manifest.tsv`、`summary.json`、`loss_curve.png`、`accuracy_curve.png` を保存します。
-1 件しか音声がない `QID` は、その fold だけ訓練不能になるのを避けるため、全 fold で train-only として扱います。
+`wav2vec2` の 5 分割 cross-validation 追加学習など、実験系の手順は [README_experiments.md](README_experiments.md) に分離しています。
 
 補足:
 

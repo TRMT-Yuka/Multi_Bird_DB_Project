@@ -10,6 +10,8 @@
   - `graph 側` の処理です。ontology PKL から graph を構築し、埋め込み生成・Dash viewer で観察します
 - [README_audio.md](README_audio.md)
   - 音声データの配置方針と音声埋め込みの実行手順です
+- [README_experiments.md](README_experiments.md)
+  - 各種実験手順です
 - [README_Docker.md](README_Docker.md)
   - BirdNET / Perch を別の Docker GPU 環境で実行する手順です
 - [README_language.md](README_language.md)
