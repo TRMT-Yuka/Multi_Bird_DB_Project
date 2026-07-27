@@ -59,7 +59,7 @@ backend ごとの既定:
   - このコード経路は `torch` 非依存です
   - 必要なシステム系: `ffmpeg`, `libsndfile`
   - 実装状況: 実装済み
-  - GPU 実行: Docker 側を推奨
+  - GPU 実行: `birdnet` conda 環境から直接実行
 - `perch`
   - window: 5 秒
   - 既定サンプルレート: 32 kHz
@@ -117,6 +117,7 @@ BirdNET を GPU で使う例:
 
 ```bash
 conda activate birdnet
+make check-birdnet-gpu
 make build-audio-embeddings-birdnet-gpu
 ```
 
@@ -128,7 +129,7 @@ make build-audio-embeddings-birdnet-gpu
 直接 CLI を叩く場合:
 
 ```bash
-PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
+conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(pwd)/temp/birdnet_appdata PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
   --backend birdnet \
   --input-dir data/raw/xeno-canto \
   --output-dir data/external/embeddings/audio \
@@ -140,12 +141,12 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 GPU を明示したい場合:
 
 ```bash
-PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
+conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(pwd)/temp/birdnet_appdata PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
   --backend birdnet \
   --device cuda
 ```
 
-このコマンドは入力ディレクトリ配下を再帰的に走査し、BirdNET なら 3 秒窓、`48 kHz` で埋め込みを作ります。`auto` では TensorFlow が GPU を認識していれば `pb` backend を選び、GPU が見えなければ CPU 用の `tf` backend を使います。  
+このコマンドは入力ディレクトリ配下を再帰的に走査し、BirdNET なら 3 秒窓、`48 kHz` で埋め込みを作ります。`auto` では TensorFlow が GPU を認識していれば `pb` backend を選びます。  
 出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
 
 `birdnet` は BirdNET 公式の file-based `encode()` にファイルパスを直接渡し、3 秒分割も BirdNET 側に任せます。  
