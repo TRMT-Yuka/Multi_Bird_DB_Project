@@ -13,7 +13,7 @@
 - [README_experiments.md](README_experiments.md)
   - 各種実験手順です
 - [README_Docker.md](README_Docker.md)
-  - BirdNET / Perch を別の Docker GPU 環境で実行する手順です
+  - BirdNET の旧 Docker GPU 手順と補助メモです。現在の主経路はホストの `birdnet` conda 環境です
 - [README_language.md](README_language.md)
   - 言語単位の ID と埋め込みの対応付けを整理するメモです
 - [README_retrieval.md](README_retrieval.md)

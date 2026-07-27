@@ -1,6 +1,6 @@
 # README_audio
 
-`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はこのリポジトリの通常作業用 conda 環境 `bird_env`、BirdNET は別 conda 環境 `birdnet` を前提に整理します。BirdNET の GPU 実行はこのリポジトリ内の Docker 環境を使います。Perch はこのマシンでは追わず、別マシン・別環境で実行して生成物だけを戻す前提にします。追加学習と実験手順は [README_experiments.md](README_experiments.md) に分離しています。
+`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はこのリポジトリの通常作業用 conda 環境 `bird_env`、BirdNET は別 conda 環境 `birdnet` を前提に整理します。BirdNET の GPU 実行もホストの `birdnet` 環境から直接行います。Perch はこのマシンでは追わず、別マシン・別環境で実行して生成物だけを戻す前提にします。追加学習と実験手順は [README_experiments.md](README_experiments.md) に分離しています。
 
 ## 概要
 
@@ -36,7 +36,7 @@
   - `bird_env` で実行します
 - `birdnet`
   - CPU 実行は `birdnet` conda 環境で行います
-  - GPU 実行は Docker 側の別環境を使います。詳細は [README_Docker.md](README_Docker.md) を参照してください
+  - GPU 実行も同じ `birdnet` conda 環境から行います
 - `perch`
   - backend 自体は残しています
   - このマシン向けの実行導線は保守しません
@@ -116,15 +116,14 @@ make build-audio-embeddings-birdnet
 BirdNET を GPU で使う例:
 
 ```bash
-make check-birdnet-ngc-tensorflow-gpu
-make build-audio-birdnet-gpu-image
+conda activate birdnet
 make build-audio-embeddings-birdnet-gpu
 ```
 
 補足:
 
 - ホスト側から一発で実行する場合は `make build-audio-embeddings-birdnet-gpu` を使います
-- すでに `make run-audio-birdnet-gpu-shell` でコンテナ内に入っている場合は、この `make` を重ねず、コンテナ内で `python3 -m multi_bird_db.cli ...` を直接実行してください
+- このターゲットは `conda run -n birdnet` と `BIRDNET_APP_DATA=temp/birdnet_appdata` を内部で設定します
 
 直接 CLI を叩く場合:
 
@@ -197,7 +196,6 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 補足:
 
 - `wav2vec2` は file 単位のベースラインです
-- `birdnet` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
 - `birdnet` は 3 秒窓、`48 kHz` です。CPU 時は `birdnet.load("acoustic", "2.4", "tf")`、GPU 時は `birdnet.load("acoustic", "2.4", "pb")` を使います
 - `perch` は 5 秒窓、`32 kHz`、`bioacoustics-model-zoo` の旧公式 `Perch.embed()` と clip DataFrame API を使います
 - `perch` は別マシン・別環境で実行し、生成物だけをこのリポジトリへ戻してください

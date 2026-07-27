@@ -3,7 +3,7 @@ PYTHONPATH := src
 EXTRACT_DUMP_JSON_ARGS ?=
 EMBEDDING_ALGORITHM ?= node2vec
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-ngc-tensorflow-gpu build-audio-birdnet-gpu-image run-audio-birdnet-gpu-shell build-audio-embeddings-wav2vec2 finetune-wav2vec2-crossval build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings inspect-multimodal-sources run-multimodal-baseline build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models build-audio-embeddings-wav2vec2 finetune-wav2vec2-crossval build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings inspect-multimodal-sources run-multimodal-baseline build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -35,15 +35,6 @@ fetch-xeno-canto-audio:
 download-audio-models:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli download-audio-models
 
-check-birdnet-ngc-tensorflow-gpu:
-	docker run --rm --gpus all nvcr.io/nvidia/tensorflow:25.02-tf2-py3 python3 -c "import tensorflow as tf; print(tf.__version__); print(tf.config.list_physical_devices('GPU'))"
-
-build-audio-birdnet-gpu-image:
-	bash scripts/run_audio_birdnet_gpu_container.sh --build-only
-
-run-audio-birdnet-gpu-shell:
-	bash scripts/run_audio_birdnet_gpu_container.sh
-
 build-audio-embeddings-wav2vec2:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend wav2vec2
 
@@ -54,7 +45,8 @@ build-audio-embeddings-birdnet:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend birdnet
 
 build-audio-embeddings-birdnet-gpu:
-	bash scripts/run_audio_birdnet_gpu_container.sh python3 -m multi_bird_db.cli build-audio-embeddings --backend birdnet --device cuda
+	mkdir -p temp/birdnet_appdata
+	conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(CURDIR)/temp/birdnet_appdata PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend birdnet --device cuda
 
 build-audio-embeddings-perch:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend perch
