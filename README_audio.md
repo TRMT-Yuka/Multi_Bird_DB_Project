@@ -37,6 +37,7 @@
 - `birdnet`
   - CPU 実行は `birdnet` conda 環境で行います
   - GPU 実行も同じ `birdnet` conda 環境から行います
+  - GPU ライブラリが不足する場合は `conda run -n birdnet python -m pip install --upgrade "tensorflow[and-cuda]==2.21.0"` を実行します
 - `perch`
   - backend 自体は残しています
   - このマシン向けの実行導線は保守しません
@@ -125,6 +126,7 @@ make build-audio-embeddings-birdnet-gpu
 
 - ホスト側から一発で実行する場合は `make build-audio-embeddings-birdnet-gpu` を使います
 - このターゲットは `conda run -n birdnet` と `BIRDNET_APP_DATA=temp/birdnet_appdata` を内部で設定します
+- 先に `nvidia-smi` が通ることを確認してください
 
 直接 CLI を叩く場合:
 
