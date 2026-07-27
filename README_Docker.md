@@ -1,6 +1,6 @@
 # README_Docker
 
-BirdNET の GPU 実行を、ホストの `.venv_BirdDB` とは別の Docker 環境へ分離するための手順です。Perch はこのマシンでは保守せず、別マシン・別環境で実行してください。
+BirdNET の GPU 実行を、ホストの `bird_env` や `birdnet` とは別の Docker 環境へ分離するための手順です。Perch はこのマシンでは保守せず、別マシン・別環境で実行してください。
 
 ## 含めるもの
 
@@ -83,12 +83,6 @@ BirdNET 埋め込みを実行する場合:
 
 ```bash
 make build-audio-embeddings-birdnet-gpu
-```
-
-BirdNET_2 埋め込みを実行する場合:
-
-```bash
-make build-audio-embeddings-birdnet-2-gpu
 ```
 
 ## Perch について

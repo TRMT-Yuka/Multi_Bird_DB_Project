@@ -25,56 +25,7 @@ class AudioEmbeddingTests(unittest.TestCase):
         self.assertEqual(backend, "pb")
         self.assertEqual(runtime_device, "GPU:0")
 
-    def test_birdnet_encoder_extracts_one_row_per_input_from_encoding_result(self) -> None:
-        class FakeWaveform:
-            def __init__(self, values):
-                self._values = np.asarray(values, dtype=np.float32)
-
-            def detach(self):
-                return self
-
-            def cpu(self):
-                return self
-
-            def numpy(self):
-                return self._values
-
-        class FakeEncodingResult:
-            def __init__(self):
-                self.embeddings = np.asarray(
-                    [
-                        [[1.0, 2.0], [9.0, 9.0]],
-                        [[3.0, 4.0], [5.0, 6.0]],
-                    ],
-                    dtype=np.float32,
-                )
-                self.embeddings_masked = np.asarray(
-                    [
-                        [[False, False], [True, True]],
-                        [[False, False], [False, False]],
-                    ],
-                    dtype=bool,
-                )
-
-        class FakeBirdNETModel:
-            def __init__(self):
-                self.last_device = None
-                self.last_batch_size = None
-
-            def encode_arrays(self, items, *, device, batch_size, **kwargs):
-                self.last_device = device
-                self.last_batch_size = batch_size
-                return FakeEncodingResult()
-
-        fake_model = FakeBirdNETModel()
-        with mock.patch.object(audio_embeddings, "birdnet_gpu_available", return_value=True):
-            encoder = audio_embeddings.BirdNETAudioEncoder(backend="auto", device="cuda", model=fake_model)
-        matrix = encoder.encode_batch([FakeWaveform([0.0, 1.0]), FakeWaveform([2.0, 3.0])])
-        np.testing.assert_allclose(matrix, np.asarray([[1.0, 2.0], [4.0, 5.0]], dtype=np.float32))
-        self.assertEqual(fake_model.last_device, "GPU:0")
-        self.assertEqual(fake_model.last_batch_size, 1)
-
-    def test_birdnet_2_encoder_uses_real_batching_on_gpu(self) -> None:
+    def test_birdnet_encoder_uses_real_batching_on_gpu(self) -> None:
         structured_dtype = np.dtype(
             [
                 ("input", "U256"),
@@ -109,7 +60,7 @@ class AudioEmbeddingTests(unittest.TestCase):
             mock.patch.object(audio_embeddings.mp, "set_start_method") as mock_set_start_method,
             mock.patch.object(audio_embeddings.os, "cpu_count", return_value=16),
         ):
-            encoder = audio_embeddings.BirdNET2AudioEncoder(backend="auto", device="cuda", model=fake_model, model_batch_size=8)
+            encoder = audio_embeddings.BirdNETAudioEncoder(backend="auto", device="cuda", model=fake_model, model_batch_size=8)
             structured = encoder.encode_files([Path("a.mp3"), Path("b.mp3"), Path("c.mp3")])
 
         self.assertEqual(structured.shape[0], 3)
@@ -125,9 +76,28 @@ class AudioEmbeddingTests(unittest.TestCase):
             def __init__(self):
                 self.last_kwargs = None
 
-            def encode_arrays(self, items, **kwargs):
+            def encode(self, paths, **kwargs):
                 self.last_kwargs = kwargs
-                return np.asarray([[1.0, 2.0]], dtype=np.float32)
+                structured_dtype = np.dtype(
+                    [
+                        ("input", "U256"),
+                        ("start_time", np.float32),
+                        ("end_time", np.float32),
+                        ("embedding", np.float32, (2,)),
+                    ]
+                )
+                rows = np.zeros(len(paths), dtype=structured_dtype)
+                for index, path in enumerate(paths):
+                    rows[index] = (str(path), 0.0, 3.0, np.asarray([1.0, 2.0], dtype=np.float32))
+
+                class FakeStructuredResult:
+                    def __init__(self, rows):
+                        self._rows = rows
+
+                    def to_structured_array(self):
+                        return self._rows
+
+                return FakeStructuredResult(rows)
 
         fake_model = FakeBirdNETModel()
         with (
@@ -136,15 +106,15 @@ class AudioEmbeddingTests(unittest.TestCase):
             mock.patch.object(audio_embeddings.mp, "set_start_method") as mock_set_start_method,
         ):
             encoder = audio_embeddings.BirdNETAudioEncoder(backend="auto", device="cuda", model=fake_model)
-            matrix = encoder.encode_batch([np.asarray([0.0, 1.0], dtype=np.float32)])
+            matrix = encoder.encode_files([Path("a.mp3")])
 
-        np.testing.assert_allclose(matrix, np.asarray([[1.0, 2.0]], dtype=np.float32))
+        self.assertEqual(matrix.shape[0], 1)
         mock_set_start_method.assert_called_once_with("spawn", force=True)
         assert fake_model.last_kwargs is not None
         self.assertEqual(fake_model.last_kwargs["device"], "GPU:0")
         self.assertEqual(fake_model.last_kwargs["batch_size"], 1)
         self.assertEqual(fake_model.last_kwargs["n_workers"], 1)
-        self.assertEqual(fake_model.last_kwargs["n_producers"], 1)
+        self.assertEqual(fake_model.last_kwargs["n_producers"], 2)
 
     def test_discover_and_embed_audio_tree(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -248,20 +218,20 @@ class AudioEmbeddingTests(unittest.TestCase):
                 model_version = "2.4"
                 backend = "tf"
 
-                def encode_batch(self, waveforms):
-                    rows = []
-                    for index, waveform in enumerate(waveforms):
-                        rows.append(
-                            np.array(
-                                [
-                                    float(index),
-                                    float(waveform.shape[0]),
-                                    float(np.mean(waveform)),
-                                ],
-                                dtype=np.float32,
-                            )
-                        )
-                    return np.vstack(rows)
+                def encode_files(self, paths, *, max_audio_duration_min=None):
+                    structured_dtype = np.dtype(
+                        [
+                            ("input", "U256"),
+                            ("start_time", np.float32),
+                            ("end_time", np.float32),
+                            ("embedding", np.float32, (3,)),
+                        ]
+                    )
+                    rows = np.zeros(3, dtype=structured_dtype)
+                    rows[0] = (str(paths[0]), 0.0, 3.0, np.asarray([0.0, 5.0, 0.0], dtype=np.float32))
+                    rows[1] = (str(paths[0]), 3.0, 5.0, np.asarray([1.0, 5.0, 0.0], dtype=np.float32))
+                    rows[2] = (str(paths[1]), 0.0, 2.0, np.asarray([2.0, 2.0, 0.0], dtype=np.float32))
+                    return rows
 
             output_dir = root / "embeddings"
             result = audio_embeddings.build_audio_embeddings(
@@ -275,7 +245,6 @@ class AudioEmbeddingTests(unittest.TestCase):
                 target_sample_rate=48000,
                 extensions=("mp3",),
                 cache_dir=None,
-                audio_loader=fake_loader,
                 encoder=FakeBirdNETEncoder(),
             )
 
@@ -294,7 +263,7 @@ class AudioEmbeddingTests(unittest.TestCase):
             self.assertEqual(result["summary"]["item_count"], 3)
             self.assertEqual(result["summary"]["failed_count"], 0)
 
-    def test_birdnet_2_backend_uses_official_file_api(self) -> None:
+    def test_birdnet_backend_uses_official_file_api(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             input_dir = root / "trimmed_xeno_data"
@@ -314,7 +283,7 @@ class AudioEmbeddingTests(unittest.TestCase):
                 ]
             )
 
-            class FakeBirdNET2Encoder:
+            class FakeBirdNETEncoder:
                 device = "cuda"
                 sample_rate = 48000
                 model_type = "acoustic"
@@ -332,13 +301,13 @@ class AudioEmbeddingTests(unittest.TestCase):
                     rows[2] = (str(file_two), 0.0, 3.0, np.asarray([7.0, 8.0, 9.0], dtype=np.float32))
                     return rows
 
-            fake_encoder = FakeBirdNET2Encoder()
+            fake_encoder = FakeBirdNETEncoder()
             output_dir = root / "embeddings"
             result = audio_embeddings.build_audio_embeddings(
                 input_dir=input_dir,
                 output_dir=output_dir,
-                backend="birdnet_2",
-                model_name="birdnet2-unit-test",
+                backend="birdnet",
+                model_name="birdnet-unit-test",
                 device="cuda",
                 batch_size=8,
                 max_seconds=30.0,
@@ -366,7 +335,7 @@ class AudioEmbeddingTests(unittest.TestCase):
             self.assertEqual(result["store"].metadata["decoder"], "birdnet_file_api")
             self.assertEqual(fake_encoder.calls, [([str(file_one), str(file_two)], None)])
 
-    def test_birdnet_2_backend_resumes_from_partial_outputs(self) -> None:
+    def test_birdnet_backend_resumes_from_partial_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             input_dir = root / "trimmed_xeno_data"
@@ -380,7 +349,7 @@ class AudioEmbeddingTests(unittest.TestCase):
             file_three.write_bytes(b"stub-audio-three")
 
             output_dir = root / "embeddings"
-            run_dir = output_dir / "birdnet_2" / "birdnet2-resume-test" / "07040000"
+            run_dir = output_dir / "birdnet" / "birdnet-resume-test" / "07040000"
             run_dir.mkdir(parents=True)
 
             manifest_rows = [
@@ -451,8 +420,8 @@ class AudioEmbeddingTests(unittest.TestCase):
                 json.dumps([row["qid"] for row in manifest_rows]), encoding="utf-8"
             )
             metadata = {
-                "backend": "birdnet_2",
-                "model_name": "birdnet2-resume-test",
+                "backend": "birdnet",
+                "model_name": "birdnet-resume-test",
                 "input_dir": str(input_dir),
                 "max_seconds": 30.0,
                 "target_sample_rate": 48000,
@@ -471,7 +440,7 @@ class AudioEmbeddingTests(unittest.TestCase):
                 ]
             )
 
-            class FakeBirdNET2Encoder:
+            class FakeBirdNETEncoder:
                 device = "cuda"
                 sample_rate = 48000
                 model_type = "acoustic"
@@ -489,12 +458,12 @@ class AudioEmbeddingTests(unittest.TestCase):
                     rows[0] = (str(file_three), 0.0, 3.0, np.asarray([10.0, 11.0, 12.0], dtype=np.float32))
                     return rows
 
-            fake_encoder = FakeBirdNET2Encoder()
+            fake_encoder = FakeBirdNETEncoder()
             result = audio_embeddings.build_audio_embeddings(
                 input_dir=input_dir,
                 output_dir=output_dir,
-                backend="birdnet_2",
-                model_name="birdnet2-resume-test",
+                backend="birdnet",
+                model_name="birdnet-resume-test",
                 device="cuda",
                 batch_size=32,
                 max_seconds=30.0,
@@ -527,9 +496,9 @@ class AudioEmbeddingTests(unittest.TestCase):
                     self.created = True
 
         with mock.patch.dict("sys.modules", {"bioacoustics_model_zoo": FakeBMZ}):
-            encoder = audio_embeddings.PerchAudioEncoder(device="cuda")
+            encoder = audio_embeddings.PerchAudioEncoder(device="cpu")
 
-        self.assertEqual(encoder.device, "cuda")
+        self.assertEqual(encoder.device, "cpu")
         self.assertTrue(encoder.model.created)
         self.assertEqual(encoder.model_type, "Perch")
 

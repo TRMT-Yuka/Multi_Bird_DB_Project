@@ -1,6 +1,6 @@
 # README_audio
 
-`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はホストの `.venv_BirdDB`、BirdNET の GPU 実行はこのリポジトリ内の Docker 環境を前提に整理します。Perch はこのマシンでは追わず、別マシン・別環境で実行して生成物だけを戻す前提にします。追加学習と実験手順は [README_experiments.md](README_experiments.md) に分離しています。
+`audio` 側の README です。音声取得と音声埋め込みの入口をまとめます。`wav2vec2` はこのリポジトリの通常作業用 conda 環境 `bird_env`、BirdNET は別 conda 環境 `birdnet` を前提に整理します。BirdNET の GPU 実行はこのリポジトリ内の Docker 環境を使います。Perch はこのマシンでは追わず、別マシン・別環境で実行して生成物だけを戻す前提にします。追加学習と実験手順は [README_experiments.md](README_experiments.md) に分離しています。
 
 ## 概要
 
@@ -19,7 +19,7 @@
 ## Backend 契約
 
 音声埋め込み backend は共通の CLI から切り替えます。  
-現在は `wav2vec2`、`birdnet`、`birdnet_2`、`perch` の backend 分岐があります。  
+現在は `wav2vec2`、`birdnet`、`perch` の backend 分岐があります。  
 この環境でまず本番利用しやすいのは `wav2vec2` です。
 
 共通ルール:
@@ -33,9 +33,9 @@
 ## 実行環境の整理
 
 - `wav2vec2`
-  - ホストの `.venv_BirdDB` で実行します
-- `birdnet` / `birdnet_2`
-  - CPU 実行はホスト側でも可能です
+  - `bird_env` で実行します
+- `birdnet`
+  - CPU 実行は `birdnet` conda 環境で行います
   - GPU 実行は Docker 側の別環境を使います。詳細は [README_Docker.md](README_Docker.md) を参照してください
 - `perch`
   - backend 自体は残しています
@@ -60,15 +60,6 @@ backend ごとの既定:
   - 必要なシステム系: `ffmpeg`, `libsndfile`
   - 実装状況: 実装済み
   - GPU 実行: Docker 側を推奨
-- `birdnet_2`
-  - window: 3 秒
-  - 既定サンプルレート: 48 kHz
-  - 目的: BirdNET 公式の file-based `encode()` に寄せた実装
-  - 必要な Python 系: `birdnet`, `tensorflow`, `tensorflow-hub`, `soundfile`
-  - このコード経路は `torch` 非依存です
-  - 必要なシステム系: `libsndfile`
-  - 実装状況: 実装済み
-  - GPU 実行: Docker 側を推奨
 - `perch`
   - window: 5 秒
   - 既定サンプルレート: 32 kHz
@@ -84,7 +75,7 @@ backend ごとの既定:
 `wav2vec2` をこの環境で使う前提の最短手順:
 
 ```bash
-source .venv_BirdDB/bin/activate
+conda activate bird_env
 python -m pip install -e '.[audio-wav2vec2]'
 make download-audio-models
 make build-audio-embeddings-wav2vec2
@@ -93,7 +84,7 @@ make build-audio-embeddings-wav2vec2
 モデルだけ先に取得したい場合:
 
 ```bash
-source .venv_BirdDB/bin/activate
+conda activate bird_env
 make download-audio-models
 ```
 
@@ -118,7 +109,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli download-audio-models \
 BirdNET を使う例:
 
 ```bash
-source .venv_BirdDB/bin/activate
+conda activate birdnet
 make build-audio-embeddings-birdnet
 ```
 
@@ -128,21 +119,6 @@ BirdNET を GPU で使う例:
 make check-birdnet-ngc-tensorflow-gpu
 make build-audio-birdnet-gpu-image
 make build-audio-embeddings-birdnet-gpu
-```
-
-BirdNET_2 を使う例:
-
-```bash
-source .venv_BirdDB/bin/activate
-make build-audio-embeddings-birdnet-2
-```
-
-BirdNET_2 を GPU で使う例:
-
-```bash
-make check-birdnet-ngc-tensorflow-gpu
-make build-audio-birdnet-gpu-image
-make build-audio-embeddings-birdnet-2-gpu
 ```
 
 補足:
@@ -173,26 +149,13 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 このコマンドは入力ディレクトリ配下を再帰的に走査し、BirdNET なら 3 秒窓、`48 kHz` で埋め込みを作ります。`auto` では TensorFlow が GPU を認識していれば `pb` backend を選び、GPU が見えなければ CPU 用の `tf` backend を使います。  
 出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
 
-BirdNET_2 を直接 CLI で叩く場合:
-
-```bash
-PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
-  --backend birdnet_2 \
-  --input-dir data/raw/xeno-canto \
-  --output-dir data/external/embeddings/audio \
-  --device auto \
-  --batch-size 8 \
-  --max-seconds 30
-```
-
-`birdnet_2` は BirdNET 公式の file-based `encode()` にファイルパスを直接渡し、3 秒分割も BirdNET 側に任せます。  
-既存の `birdnet` backend は、このリポジトリ側で decode・resample・windowing した波形を `encode_arrays()` に渡す経路です。  
+`birdnet` は BirdNET 公式の file-based `encode()` にファイルパスを直接渡し、3 秒分割も BirdNET 側に任せます。  
 `--resume-existing` を付けると、既存の `embeddings.*` だけでなく `*.partial.*` も読んで、完了済み音声をスキップしながら再開できます。バッチサイズ変更後の再開にも使えます。
 
 Perch を使う例:
 
 ```bash
-source .venv_BirdDB/bin/activate
+conda activate bird_env
 make build-audio-embeddings-perch
 ```
 
@@ -234,7 +197,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 補足:
 
 - `wav2vec2` は file 単位のベースラインです
-- `birdnet` / `birdnet_2` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
+- `birdnet` の GPU 実行手順は [README_Docker.md](README_Docker.md) に分離しています
 - `birdnet` は 3 秒窓、`48 kHz` です。CPU 時は `birdnet.load("acoustic", "2.4", "tf")`、GPU 時は `birdnet.load("acoustic", "2.4", "pb")` を使います
 - `perch` は 5 秒窓、`32 kHz`、`bioacoustics-model-zoo` の旧公式 `Perch.embed()` と clip DataFrame API を使います
 - `perch` は別マシン・別環境で実行し、生成物だけをこのリポジトリへ戻してください

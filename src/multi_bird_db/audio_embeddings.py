@@ -635,71 +635,6 @@ class Wav2Vec2AudioEncoder:
 
 
 class BirdNETAudioEncoder:
-    """Encode 3-second windows with BirdNET. / BirdNET で 3 秒窓を埋め込む。"""
-
-    def __init__(
-        self,
-        model_type: str = DEFAULT_BIRDNET_MODEL_TYPE,
-        model_version: str = DEFAULT_BIRDNET_MODEL_VERSION,
-        backend: str = DEFAULT_BIRDNET_BACKEND,
-        device: str = "cpu",
-        model: Any | None = None,
-    ):
-        try:
-            import birdnet
-        except Exception as exc:  # pragma: no cover - optional dependency guard
-            raise RuntimeError(
-                "BirdNET backend requires the `birdnet` Python package. Install the audio-birdnet extra and retry."
-            ) from exc
-
-        self.model_type = model_type
-        self.model_version = model_version
-        self.backend, self.runtime_device = resolve_birdnet_runtime(device, backend)
-        _ensure_spawn_start_method_for_birdnet_gpu(self.runtime_device)
-        self.device = "cuda" if self.runtime_device.startswith("GPU") else "cpu"
-        self.sample_rate = DEFAULT_BIRDNET_SAMPLE_RATE
-        self.model = model if model is not None else birdnet.load(model_type, model_version, self.backend)
-
-    def _coerce_result_rows(self, encoded: Any, expected_rows: int) -> np.ndarray:
-        if hasattr(encoded, "embeddings") and hasattr(encoded, "embeddings_masked"):
-            embeddings = np.asarray(encoded.embeddings, dtype=np.float32)
-            mask = np.asarray(encoded.embeddings_masked, dtype=bool)
-            if embeddings.ndim == 3 and mask.ndim == 3:
-                rows: list[np.ndarray] = []
-                valid_mask = ~mask.all(axis=2)
-                for input_index in range(embeddings.shape[0]):
-                    valid_embeddings = embeddings[input_index][valid_mask[input_index]]
-                    if valid_embeddings.size == 0:
-                        raise RuntimeError(f"BirdNET returned no valid embeddings for input index {input_index}.")
-                    rows.append(valid_embeddings.mean(axis=0, dtype=np.float32))
-                return _coerce_embedding_matrix(np.stack(rows, axis=0), expected_rows=expected_rows)
-        if hasattr(encoded, "embeddings"):
-            encoded = encoded.embeddings
-        encoded_array = np.asarray(encoded, dtype=np.float32)
-        if encoded_array.ndim == 3:
-            encoded_array = encoded_array.mean(axis=1)
-        return _coerce_embedding_matrix(encoded_array, expected_rows=expected_rows)
-
-    def encode_batch(self, waveforms: list[np.ndarray]) -> np.ndarray:
-        items = [
-            (
-                _normalize_waveform_array(waveform).reshape(-1).astype(np.float32, copy=False),
-                self.sample_rate,
-            )
-            for waveform in waveforms
-        ]
-        use_gpu = self.runtime_device.startswith("GPU")
-        encoded = self.model.encode_arrays(
-            items,
-            device=self.runtime_device,
-            batch_size=1 if use_gpu else max(1, len(items)),
-            n_workers=1 if use_gpu else None,
-            n_producers=1,
-        )
-        return self._coerce_result_rows(encoded, expected_rows=len(items))
-
-
-class BirdNET2AudioEncoder:
     """Encode files with the official BirdNET file-based API. / BirdNET の公式 file-based API で埋め込む。"""
 
     def __init__(
@@ -717,7 +652,7 @@ class BirdNET2AudioEncoder:
             import birdnet
         except Exception as exc:  # pragma: no cover - optional dependency guard
             raise RuntimeError(
-                "BirdNET_2 backend requires the `birdnet` Python package. Install the audio-birdnet extra and retry."
+                "BirdNET backend requires the `birdnet` Python package. Install the audio-birdnet extra and retry."
             ) from exc
 
         self.model_type = model_type
@@ -1155,7 +1090,7 @@ def _build_audio_embeddings_perch(
     return {"store": store, "summary": summary, "manifest_rows": manifest_rows, "failed_rows": failed_rows}
 
 
-def _build_audio_embeddings_birdnet2(
+def _build_audio_embeddings_birdnet(
     *,
     input_dir: Path,
     output_dir: Path,
@@ -1171,14 +1106,14 @@ def _build_audio_embeddings_birdnet2(
     if not files:
         raise FileNotFoundError(f"No audio files were found under: {input_dir}")
 
-    run_root = output_dir / "birdnet_2" / _safe_component(model_name)
+    run_root = output_dir / "birdnet" / _safe_component(model_name)
     existing_items: dict[str, dict[str, Any]] = {}
     resume_source_run_count = 0
     if resume_existing:
         existing_items, resume_source_run_count = _load_existing_audio_items(
             run_root,
             input_dir=input_dir,
-            backend="birdnet_2",
+            backend="birdnet",
             model_name=model_name,
             max_seconds=max_seconds,
             target_sample_rate=DEFAULT_BIRDNET_SAMPLE_RATE,
@@ -1212,10 +1147,10 @@ def _build_audio_embeddings_birdnet2(
             qids=list(qids),
             embeddings=embeddings,
             metadata={
-                "kind": "audio_birdnet_2_embeddings",
+                "kind": "audio_birdnet_embeddings",
                 "dataset": "xeno-canto",
                 "created_at_utc": _timestamp_utc(),
-                "backend": "birdnet_2",
+                "backend": "birdnet",
                 "backend_notes": "Official BirdNET file-based encode() path.",
                 "backend_required_python_packages": ["birdnet", "tensorflow", "tensorflow-hub"],
                 "backend_required_system_packages": ["libsndfile"],
@@ -1264,7 +1199,7 @@ def _build_audio_embeddings_birdnet2(
         _write_json_atomic(
             run_dir / "summary.partial.json",
             {
-                "backend": "birdnet_2",
+                "backend": "birdnet",
                 "model_name": model_name,
                 "run_dir": str(run_dir),
                 "item_count": len(audio_ids),
@@ -1290,7 +1225,7 @@ def _build_audio_embeddings_birdnet2(
             return
         label = f" | {current_label}" if current_label else ""
         _render_progress_line(
-            f"audio-birdnet_2 | files {processed_files}/{total_files} | items {len(audio_ids)} | "
+            f"audio-birdnet | files {processed_files}/{total_files} | items {len(audio_ids)} | "
             f"reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
         )
         last_progress_time = now
@@ -1407,9 +1342,9 @@ def _build_audio_embeddings_birdnet2(
 
     if not embedding_rows:
         _finish_progress_line(
-            f"audio-birdnet_2 done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+            f"audio-birdnet done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
         )
-        raise RuntimeError("No audio files could be embedded. Check the BirdNET_2 setup and input files.")
+        raise RuntimeError("No audio files could be embedded. Check the BirdNET setup and input files.")
 
     store = _build_store(partial=False)
     embeddings = store.embeddings
@@ -1417,11 +1352,11 @@ def _build_audio_embeddings_birdnet2(
     _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
     _write_json_atomic(run_dir / "failed_items.json", failed_rows)
     _finish_progress_line(
-        f"audio-birdnet_2 done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+        f"audio-birdnet done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
     )
 
     summary = {
-        "kind": "audio_birdnet_2_embeddings",
+        "kind": "audio_birdnet_embeddings",
         "created_at_utc": store.metadata["created_at_utc"],
         "input_dir": str(input_dir),
         "output_root": str(output_dir),
@@ -1489,15 +1424,10 @@ def build_audio_embeddings(
             encoder = Wav2Vec2AudioEncoder(model_name=model_name, device=device, cache_dir=cache_dir)
     elif backend == "birdnet":
         if encoder is None:
-            encoder = BirdNETAudioEncoder(device=device)
+            encoder = BirdNETAudioEncoder(device=device, model_batch_size=batch_size)
         if model_name == DEFAULT_MODEL_NAME:
             model_name = f"birdnet-{encoder.model_type}-{encoder.model_version}-{encoder.backend}"
-    elif backend == "birdnet_2":
-        if encoder is None:
-            encoder = BirdNET2AudioEncoder(device=device, model_batch_size=batch_size)
-        if model_name == DEFAULT_MODEL_NAME:
-            model_name = f"birdnet_2-{encoder.model_type}-{encoder.model_version}-{encoder.backend}"
-        return _build_audio_embeddings_birdnet2(
+        return _build_audio_embeddings_birdnet(
             input_dir=input_dir,
             output_dir=output_dir,
             model_name=model_name,
