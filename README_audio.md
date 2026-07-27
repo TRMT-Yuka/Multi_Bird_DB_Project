@@ -220,7 +220,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli fetch-xeno-canto-recording-json \
   --api-key "$XENO_CANTO_API_KEY"
 ```
 
-入力は `data/interim/wikidata/bird_xeno_canto_ids.tsv` です。  
+入力は `data/interim/wikidata/bird_xeno_canto_ids.tsv` です。存在しない場合は `data/processed/bird_ontology.pkl` から自動生成してから進みます。  
 各 `xeno_canto_species_id` に対して `api/3/recordings` を 1 ページだけ取得し、JSON を `data/interim/xeno-canto/api_recordings/<qid>/` に保存します。  
 検索条件は品質 `A`、`per_page=20` です。
 

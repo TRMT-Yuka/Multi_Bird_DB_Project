@@ -22,6 +22,7 @@ from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from .config import get_project_paths
+from .xeno_canto_ids import extract_xeno_canto_ids
 
 USER_AGENT = "Multi_Bird_DB_Project/0.1 (research and educational use; contact: local-project)"
 DEFAULT_SINCE_DATE = date(2025, 5, 1)
@@ -262,6 +263,14 @@ def fetch_xeno_canto_recording_jsons(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     api_key = load_xeno_canto_api_key(api_key)
+    if not input_path.exists():
+        paths = get_project_paths()
+        if input_path == paths.xeno_canto_ids_tsv and paths.ontology_pkl.exists():
+            extract_xeno_canto_ids(paths.ontology_pkl, input_path)
+        elif input_path == paths.xeno_canto_ids_tsv:
+            raise FileNotFoundError(
+                f"Missing Xeno-canto ID table: {input_path}. Run `make extract-xeno-canto-ids` after generating {paths.ontology_pkl}."
+            )
     targets = load_targets(input_path)
     manifest_rows: list[dict[str, Any]] = []
     failed_qids: list[str] = []
@@ -380,7 +389,16 @@ def build_xeno_canto_recording_map_from_api(
 
     if input_path.is_dir():
         manifest = scan_api_recording_pages(input_path)
-        targets_by_qid = {row["qid"]: row for row in load_targets(get_project_paths().xeno_canto_ids_tsv)}
+        paths = get_project_paths()
+        xeno_canto_ids_path = paths.xeno_canto_ids_tsv
+        if not xeno_canto_ids_path.exists():
+            if paths.ontology_pkl.exists():
+                extract_xeno_canto_ids(paths.ontology_pkl, xeno_canto_ids_path)
+            else:
+                raise FileNotFoundError(
+                    f"Missing Xeno-canto ID table: {xeno_canto_ids_path}. Run `make extract-xeno-canto-ids` after generating {paths.ontology_pkl}."
+                )
+        targets_by_qid = {row["qid"]: row for row in load_targets(xeno_canto_ids_path)}
     else:
         if not input_path.exists():
             raise FileNotFoundError(f"API input does not exist: {input_path}")
