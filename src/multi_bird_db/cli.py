@@ -69,6 +69,11 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         module="multi_bird_db.audio_finetuning",
         handler_name="main",
     ),
+    "repair-xeno-canto-audio": CommandSpec(
+        help="Validate, re-download, and re-check corrupted Xeno-canto audio files.",
+        module="multi_bird_db.audio_repair",
+        handler_name="main",
+    ),
     "build-graph": CommandSpec(
         help="Build taxonomy graph PKL from ontology PKL.",
         module="multi_bird_db.graph",

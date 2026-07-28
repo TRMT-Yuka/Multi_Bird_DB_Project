@@ -40,6 +40,7 @@ DEFAULT_EXTENSIONS = ("mp3", "wav", "flac", "ogg", "m4a")
 DEFAULT_CACHE_DIR = get_project_paths().root / "data" / "external" / "models" / "audio" / "huggingface"
 SAFE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 QID_RE = re.compile(r"^Q\d+$")
+FFMPEG_BIN_DIR_ENV = "FFMPEG_BIN_DIR"
 
 MANIFEST_COLUMNS = [
     "audio_id",
@@ -69,6 +70,27 @@ def _safe_component(value: str) -> str:
     normalized = SAFE_COMPONENT_RE.sub("_", value.strip())
     normalized = normalized.strip("._")
     return normalized or "item"
+
+
+def _resolve_media_binary(binary_name: str) -> str | None:
+    """Resolve ffmpeg/ffprobe from PATH, explicit env, or common static install dirs."""
+
+    path_binary = shutil.which(binary_name)
+    if path_binary:
+        return path_binary
+
+    candidate_dirs: list[Path] = []
+    env_dir = os.environ.get(FFMPEG_BIN_DIR_ENV)
+    if env_dir:
+        candidate_dirs.append(Path(env_dir).expanduser())
+    home_dir = Path.home()
+    candidate_dirs.extend(sorted(home_dir.glob("ffmpeg-*-static")))
+
+    for candidate_dir in candidate_dirs:
+        candidate = candidate_dir / binary_name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
 
 
 def _render_progress_line(message: str) -> None:
@@ -334,9 +356,9 @@ def build_audio_id(path: Path, qid: str, input_dir: Path) -> str:
 
 
 def _probe_audio_duration_seconds(path: Path) -> float:
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = _resolve_media_binary("ffprobe")
     if not ffprobe:
-        raise RuntimeError("ffprobe is not available.")
+        raise RuntimeError(f"ffprobe is not available. Put it on PATH or set {FFMPEG_BIN_DIR_ENV}.")
     command = [
         ffprobe,
         "-v",
@@ -362,9 +384,9 @@ def _probe_audio_duration_seconds(path: Path) -> float:
 
 
 def _load_with_ffmpeg(path: Path, target_sample_rate: int, max_seconds: float | None) -> tuple[np.ndarray, int]:
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = _resolve_media_binary("ffmpeg")
     if not ffmpeg:
-        raise RuntimeError("ffmpeg is not available.")
+        raise RuntimeError(f"ffmpeg is not available. Put it on PATH or set {FFMPEG_BIN_DIR_ENV}.")
 
     command = [
         ffmpeg,

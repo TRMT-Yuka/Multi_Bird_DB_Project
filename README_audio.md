@@ -105,7 +105,24 @@ PYTHONPATH=src python3 -m multi_bird_db.cli download-audio-models \
 注意:
 
 - この実装では共通の音声 decode / resample を `ffmpeg` ベースで処理します
-- `build-audio-embeddings-wav2vec2` の前に、`PATH` を通して `ffmpeg` コマンドを実行可能にしておく必要があります
+- `build-audio-embeddings-wav2vec2` の前に、`ffmpeg` と `ffprobe` を実行可能にしておく必要があります
+- 通常は `PATH` に通します。別ディレクトリに置く場合は `FFMPEG_BIN_DIR` にそのディレクトリを指定します
+- `~/ffmpeg-*-static/` に置いた静的 ffmpeg は自動検出されます
+
+Xeno-canto 音声の破損チェックと再取得:
+
+```bash
+source .venv_BirdDB/bin/activate
+make repair-xeno-canto-audio
+```
+
+検査のみで置換しない場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli repair-xeno-canto-audio --check-only
+```
+
+結果は `data/external/models/audio/wav2vec2-finetuned/xeno_canto_audio_repair.tsv` に保存されます。
 
 BirdNET を使う例:
 
