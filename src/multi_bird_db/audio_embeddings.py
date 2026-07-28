@@ -1253,8 +1253,10 @@ def _build_audio_embeddings_birdnet(
         last_progress_time = now
 
     _finish_progress_line(
-        f"birdnet runtime | backend {encoder.backend} | device {encoder.device} | "
-        f"resolved_device {encoder.runtime_device} | sample_rate {encoder.sample_rate}"
+        f"birdnet runtime | backend {getattr(encoder, 'backend', 'unknown')} | "
+        f"device {getattr(encoder, 'device', 'unknown')} | "
+        f"resolved_device {getattr(encoder, 'runtime_device', 'unknown')} | "
+        f"sample_rate {getattr(encoder, 'sample_rate', 'unknown')}"
     )
 
     def append_reused_item(item: dict[str, Any]) -> None:
