@@ -409,10 +409,11 @@ def _train_one_fold(
             "eval_example_count": eval_metrics["example_count"],
         }
         history.append(epoch_metrics)
+        eval_accuracy = eval_metrics["accuracy"]
+        eval_accuracy_text = "n/a" if eval_accuracy is None else f"{float(eval_accuracy):.4f}"
         _finish_progress_line(
             f"wav2vec2 fold {fold.fold_index} | epoch {epoch_index + 1}/{num_epochs} | "
-            f"train_loss {train_loss:.4f} | eval_accuracy "
-            f"{('n/a' if eval_metrics['accuracy'] is None else f'{float(eval_metrics['accuracy']):.4f}') }"
+            f"train_loss {train_loss:.4f} | eval_accuracy {eval_accuracy_text}"
         )
 
     model_dir = output_dir / f"wav2vec2-model_{fold.fold_index}"
