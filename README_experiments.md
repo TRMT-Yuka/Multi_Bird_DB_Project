@@ -40,6 +40,50 @@ PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval \
   --seed 42
 ```
 
+## Xeno-canto 音声の破損チェックと再取得
+
+`ffmpeg` が decode できない音声ファイルが混入していると、`finetune-wav2vec2-crossval` は学習中に停止します。
+その場合は、先に壊れた音声を特定し、Xeno-canto から再ダウンロードして、再度 decode できることを確認します。
+
+通常実行:
+
+```bash
+source .venv_BirdDB/bin/activate
+make repair-xeno-canto-audio
+```
+
+検査のみ行い、ファイルを置換しない場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli repair-xeno-canto-audio --check-only
+```
+
+直接 CLI を叩く場合:
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli repair-xeno-canto-audio \
+  --input-dir data/raw/xeno-canto \
+  --recording-map data/interim/xeno-canto/recording_map.json \
+  --report data/external/models/audio/wav2vec2-finetuned/xeno_canto_audio_repair.tsv
+```
+
+出力:
+
+- `data/external/models/audio/wav2vec2-finetuned/xeno_canto_audio_repair.tsv`
+- `data/external/models/audio/wav2vec2-finetuned/xeno_canto_audio_repair.json`
+
+`status` は主に次の値です。
+
+- `valid`: 既存ファイルが decode 可能
+- `repaired`: 既存ファイルは壊れていたが、再ダウンロード後のファイルが decode 可能だったため置換済み
+- `repair_failed`: 再ダウンロードまたは再decode確認に失敗
+
+修復後に改めて学習を実行します。
+
+```bash
+make finetune-wav2vec2-crossval
+```
+
 ## 分割ルール
 
 - 5 分割 cross-validation です
@@ -68,7 +112,9 @@ PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval \
 ## 補足
 
 - `wav2vec2` は file 単位のベースラインです
-- `ffmpeg` が `PATH` 上で実行可能である必要があります
+- 音声 decode には `ffmpeg` と `ffprobe` が必要です
+- 通常は `PATH` に通します。別ディレクトリに置く場合は `FFMPEG_BIN_DIR` にそのディレクトリを指定します
+- `~/ffmpeg-*-static/` に置いた静的 ffmpeg は自動検出されます
 - 追加学習済みモデルと、そこから作る埋め込みは保存先が別です
 - モデル: `data/external/models/audio/...`
 - 埋め込み: `data/external/embeddings/audio/...`

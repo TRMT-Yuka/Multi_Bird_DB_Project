@@ -22,6 +22,7 @@ from urllib.parse import quote, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from .config import get_project_paths
+from .audio_embeddings import _resolve_media_binary
 
 USER_AGENT = "Multi_Bird_DB_Project/0.1 (research and educational use; contact: local-project)"
 DEFAULT_SINCE_DATE = date(2025, 5, 1)
@@ -42,7 +43,7 @@ SAFE_PATH_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
 def resolve_ffmpeg_executable() -> str | None:
     """Resolve an ffmpeg binary from PATH or an optional Python package."""
 
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = _resolve_media_binary("ffmpeg")
     if ffmpeg:
         return ffmpeg
     try:
@@ -555,7 +556,7 @@ def _ffmpeg_codec_args(file_type: str) -> list[str]:
 def probe_audio_duration_seconds(input_path: Path) -> float | None:
     """Return audio duration in seconds if ffprobe is available. / ffprobe があれば音声長を秒で返す。"""
 
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = _resolve_media_binary("ffprobe")
     if not ffprobe:
         return None
     command = [
@@ -584,7 +585,7 @@ def probe_audio_duration_seconds(input_path: Path) -> float | None:
 def clip_audio_file(input_path: Path, output_path: Path, file_type: str, clip_seconds: int) -> None:
     """Trim the first N seconds using ffmpeg. / ffmpeg で先頭 N 秒を切り出す。"""
 
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = resolve_ffmpeg_executable()
     if not ffmpeg:
         raise RuntimeError("ffmpeg is required to clip Xeno-canto audio.")
     output_path.parent.mkdir(parents=True, exist_ok=True)

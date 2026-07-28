@@ -13,6 +13,34 @@ from multi_bird_db import audio_embeddings
 
 
 class AudioEmbeddingTests(unittest.TestCase):
+
+    def test_resolve_media_binary_uses_explicit_ffmpeg_bin_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            binary = Path(tmp_dir) / "ffmpeg"
+            binary.write_text("#!/bin/sh\n", encoding="utf-8")
+            binary.chmod(0o755)
+            with (
+                mock.patch.object(audio_embeddings.shutil, "which", return_value=None),
+                mock.patch.dict(audio_embeddings.os.environ, {audio_embeddings.FFMPEG_BIN_DIR_ENV: tmp_dir}),
+                mock.patch.object(audio_embeddings.Path, "home", return_value=Path("/does/not/exist")),
+            ):
+                self.assertEqual(audio_embeddings._resolve_media_binary("ffmpeg"), str(binary))
+
+    def test_resolve_media_binary_uses_static_home_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            home = Path(tmp_dir)
+            static_dir = home / "ffmpeg-7.0.2-arm64-static"
+            static_dir.mkdir()
+            binary = static_dir / "ffprobe"
+            binary.write_text("#!/bin/sh\n", encoding="utf-8")
+            binary.chmod(0o755)
+            with (
+                mock.patch.object(audio_embeddings.shutil, "which", return_value=None),
+                mock.patch.dict(audio_embeddings.os.environ, {}, clear=True),
+                mock.patch.object(audio_embeddings.Path, "home", return_value=home),
+            ):
+                self.assertEqual(audio_embeddings._resolve_media_binary("ffprobe"), str(binary))
+
     def test_resolve_birdnet_runtime_uses_tf_on_cpu_without_tensorflow_gpu(self) -> None:
         with mock.patch.object(audio_embeddings, "birdnet_gpu_available", return_value=False):
             backend, runtime_device = audio_embeddings.resolve_birdnet_runtime("auto")
