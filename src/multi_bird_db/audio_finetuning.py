@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import time
@@ -38,6 +39,8 @@ DEFAULT_BATCH_SIZE = 4
 DEFAULT_EVAL_BATCH_SIZE = 8
 DEFAULT_SEED = 42
 DEFAULT_RECORDING_MAP_PATH = get_project_paths().xeno_canto_recording_map_json
+DEFAULT_AUDIO_REPAIR_REPORT_PATH = DEFAULT_OUTPUT_DIR / "xeno_canto_audio_repair.tsv"
+ALLOWED_REPAIR_STATUSES = {"valid", "repaired"}
 
 MANIFEST_COLUMNS = [
     "qid",
@@ -180,6 +183,40 @@ def build_finetune_examples(
             )
         )
     return examples
+
+
+def _load_excluded_audio_keys(repair_report_path: Path | None) -> set[tuple[str, str]]:
+    if repair_report_path is None or not repair_report_path.exists():
+        return set()
+    excluded: set[tuple[str, str]] = set()
+    with repair_report_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        for row in reader:
+            status = str(row.get("status", "")).strip()
+            if not status or status in ALLOWED_REPAIR_STATUSES:
+                continue
+            qid = str(row.get("qid", "")).strip()
+            recording_id = str(row.get("recording_id", "")).strip()
+            if qid and recording_id:
+                excluded.add((qid, recording_id))
+    return excluded
+
+
+def _filter_repair_failed_examples(
+    examples: list[FineTuneExample],
+    repair_report_path: Path | None,
+) -> tuple[list[FineTuneExample], list[FineTuneExample]]:
+    excluded_keys = _load_excluded_audio_keys(repair_report_path)
+    if not excluded_keys:
+        return examples, []
+    valid_examples: list[FineTuneExample] = []
+    excluded_examples: list[FineTuneExample] = []
+    for item in examples:
+        if (item.qid, item.recording_id) in excluded_keys:
+            excluded_examples.append(item)
+        else:
+            valid_examples.append(item)
+    return valid_examples, excluded_examples
 
 
 def assign_crossval_folds(
@@ -471,14 +508,21 @@ def finetune_wav2vec2_crossval(
     freeze_feature_encoder: bool = True,
     extensions: tuple[str, ...] = DEFAULT_EXTENSIONS,
     seed: int = DEFAULT_SEED,
+    audio_repair_report: Path | None = DEFAULT_AUDIO_REPAIR_REPORT_PATH,
 ) -> dict[str, Any]:
+    raw_examples = build_finetune_examples(input_dir=input_dir, recording_map_path=recording_map_path, extensions=extensions)
+    if not raw_examples:
+        raise FileNotFoundError(f"No audio files were found under: {input_dir}")
+
+    raw_examples, excluded_examples = _filter_repair_failed_examples(raw_examples, audio_repair_report)
+    if not raw_examples:
+        raise RuntimeError(f"No usable audio files remain after applying repair report: {audio_repair_report}")
+
     assigned_examples = assign_crossval_folds(
-        build_finetune_examples(input_dir=input_dir, recording_map_path=recording_map_path, extensions=extensions),
+        raw_examples,
         num_folds=num_folds,
         seed=seed,
     )
-    if not assigned_examples:
-        raise FileNotFoundError(f"No audio files were found under: {input_dir}")
 
     qids = sorted({item.qid for item in assigned_examples})
     label2id = {qid: index for index, qid in enumerate(qids)}
@@ -486,6 +530,7 @@ def finetune_wav2vec2_crossval(
     resolved_device = resolve_torch_device(device)
     output_dir.mkdir(parents=True, exist_ok=True)
     _write_manifest(output_dir / "fold_assignments.tsv", assigned_examples)
+    _write_manifest(output_dir / "excluded_audio_files.tsv", excluded_examples)
 
     folds = build_fold_splits(assigned_examples, num_folds=num_folds)
     fold_summaries = []
@@ -529,6 +574,8 @@ def finetune_wav2vec2_crossval(
         "freeze_feature_encoder": freeze_feature_encoder,
         "seed": seed,
         "audio_file_count": len(assigned_examples),
+        "excluded_audio_file_count": len(excluded_examples),
+        "audio_repair_report": "" if audio_repair_report is None else str(audio_repair_report),
         "label_count": len(label2id),
         "singleton_train_only_count": sum(1 for row in assigned_examples if row.train_only_all_folds),
         "fold_summaries": fold_summaries,
@@ -557,6 +604,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-freeze-feature-encoder", dest="freeze_feature_encoder", action="store_false")
     parser.add_argument("--extensions", default=",".join(DEFAULT_EXTENSIONS))
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--audio-repair-report", default=str(DEFAULT_AUDIO_REPAIR_REPORT_PATH))
+    parser.add_argument("--no-audio-repair-report", dest="audio_repair_report", action="store_const", const="")
     return parser
 
 
@@ -580,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         freeze_feature_encoder=args.freeze_feature_encoder,
         extensions=extensions,
         seed=args.seed,
+        audio_repair_report=Path(args.audio_repair_report) if args.audio_repair_report else None,
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0

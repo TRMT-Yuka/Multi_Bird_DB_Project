@@ -123,6 +123,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli repair-xeno-canto-audio --check-only
 ```
 
 結果は `data/external/models/audio/wav2vec2-finetuned/xeno_canto_audio_repair.tsv` に保存されます。
+`repair_failed` など修復不能な音声は、`finetune-wav2vec2-crossval` 実行時に既定で除外されます。
 
 BirdNET を使う例:
 

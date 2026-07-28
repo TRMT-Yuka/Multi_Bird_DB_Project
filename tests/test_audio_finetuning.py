@@ -37,6 +37,26 @@ class AudioFineTuningTests(unittest.TestCase):
             self.assertEqual(rows[0].xeno_canto_species_id, "Corvus-corax")
             self.assertEqual(rows[0].download_url, "https://example.org/111")
 
+    def test_filter_repair_failed_examples_excludes_bad_statuses(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir_str:
+            root = Path(tmpdir_str)
+            report = root / "repair.tsv"
+            rows_text = (
+                "qid\trecording_id\taudio_path\trelative_path\tstatus\treason\tdownload_url\tbefore_size\tafter_size\n"
+                "Q1\ta\t/tmp/Q1/a.mp3\tQ1/a.mp3\tvalid\t\t\t1\t1\n"
+                "Q1\tb\t/tmp/Q1/b.mp3\tQ1/b.mp3\trepaired\t\t\t1\t1\n"
+                "Q1\tc\t/tmp/Q1/c.mp3\tQ1/c.mp3\trepair_failed\tbad\t\t1\t1\n"
+            )
+            report.write_text(rows_text, encoding="utf-8")
+            rows = [
+                audio_finetuning.FineTuneExample("Q1", "a", "/tmp/Q1/a.mp3", "Q1/a.mp3", "", "", None, False),
+                audio_finetuning.FineTuneExample("Q1", "b", "/tmp/Q1/b.mp3", "Q1/b.mp3", "", "", None, False),
+                audio_finetuning.FineTuneExample("Q1", "c", "/tmp/Q1/c.mp3", "Q1/c.mp3", "", "", None, False),
+            ]
+            kept, excluded = audio_finetuning._filter_repair_failed_examples(rows, report)
+            self.assertEqual([row.recording_id for row in kept], ["a", "b"])
+            self.assertEqual([row.recording_id for row in excluded], ["c"])
+
     def test_assign_crossval_folds_keeps_singletons_train_only(self) -> None:
         rows = [
             audio_finetuning.FineTuneExample("Q1", "a", "/tmp/Q1/a.mp3", "Q1/a.mp3", "", "", None, False),

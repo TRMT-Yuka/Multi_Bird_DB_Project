@@ -84,6 +84,15 @@ PYTHONPATH=src python3 -m multi_bird_db.cli repair-xeno-canto-audio \
 make finetune-wav2vec2-crossval
 ```
 
+`finetune-wav2vec2-crossval` は既定で `xeno_canto_audio_repair.tsv` を読み、`valid` / `repaired` 以外の音声を学習対象から除外します。
+除外された音声は `data/external/models/audio/wav2vec2-finetuned/excluded_audio_files.tsv` に保存されます。
+
+修復レポートを使わず全音声を使う場合のみ、次のように明示します。
+
+```bash
+PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval --no-audio-repair-report
+```
+
 ## 分割ルール
 
 - 5 分割 cross-validation です
