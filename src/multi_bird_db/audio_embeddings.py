@@ -1252,6 +1252,11 @@ def _build_audio_embeddings_birdnet(
         )
         last_progress_time = now
 
+    _finish_progress_line(
+        f"birdnet runtime | backend {encoder.backend} | device {encoder.device} | "
+        f"resolved_device {encoder.runtime_device} | sample_rate {encoder.sample_rate}"
+    )
+
     def append_reused_item(item: dict[str, Any]) -> None:
         nonlocal reused_item_count
         row_with_index = dict(item["manifest_row"])

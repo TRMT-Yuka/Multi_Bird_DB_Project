@@ -36,7 +36,7 @@ download-audio-models:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli download-audio-models
 
 check-birdnet-gpu:
-	conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(CURDIR)/temp/birdnet_appdata PYTHONPATH=$(PYTHONPATH) python3 -c "import tensorflow as tf; print(tf.__version__); print(tf.config.list_physical_devices('GPU'))"
+	conda run -n birdnet --no-capture-output env TF_CPP_MIN_LOG_LEVEL=2 TF_ENABLE_ONEDNN_OPTS=0 BIRDNET_APP_DATA=$(CURDIR)/temp/birdnet_appdata PYTHONPATH=$(PYTHONPATH) python3 -c "import tensorflow as tf; print(tf.__version__); print(tf.config.list_physical_devices('GPU'))"
 
 build-audio-embeddings-wav2vec2:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend wav2vec2
@@ -52,7 +52,7 @@ build-audio-embeddings-birdnet:
 
 build-audio-embeddings-birdnet-gpu:
 	mkdir -p temp/birdnet_appdata
-	conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(CURDIR)/temp/birdnet_appdata PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend birdnet --device cuda
+	conda run -n birdnet --no-capture-output env TF_CPP_MIN_LOG_LEVEL=2 TF_ENABLE_ONEDNN_OPTS=0 BIRDNET_APP_DATA=$(CURDIR)/temp/birdnet_appdata PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend birdnet --device cuda
 
 build-audio-embeddings-perch:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-audio-embeddings --backend perch

@@ -143,12 +143,13 @@ make build-audio-embeddings-birdnet-gpu
 
 - ホスト側から一発で実行する場合は `make build-audio-embeddings-birdnet-gpu` を使います
 - このターゲットは `conda run -n birdnet` と `BIRDNET_APP_DATA=temp/birdnet_appdata` を内部で設定します
+- TensorFlow の起動時警告を抑えるため、`TF_CPP_MIN_LOG_LEVEL=2` と `TF_ENABLE_ONEDNN_OPTS=0` を付けています
 - 先に `nvidia-smi` が通ることを確認してください
 
 直接 CLI を叩く場合:
 
 ```bash
-conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(pwd)/temp/birdnet_appdata PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
+conda run -n birdnet --no-capture-output env TF_CPP_MIN_LOG_LEVEL=2 TF_ENABLE_ONEDNN_OPTS=0 BIRDNET_APP_DATA=$(pwd)/temp/birdnet_appdata PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
   --backend birdnet \
   --input-dir data/raw/xeno-canto \
   --output-dir data/external/embeddings/audio \
@@ -160,7 +161,7 @@ conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(pwd)/temp/birdne
 GPU を明示したい場合:
 
 ```bash
-conda run -n birdnet --no-capture-output env BIRDNET_APP_DATA=$(pwd)/temp/birdnet_appdata PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
+conda run -n birdnet --no-capture-output env TF_CPP_MIN_LOG_LEVEL=2 TF_ENABLE_ONEDNN_OPTS=0 BIRDNET_APP_DATA=$(pwd)/temp/birdnet_appdata PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
   --backend birdnet \
   --device cuda
 ```
@@ -217,6 +218,7 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 
 - `wav2vec2` は file 単位のベースラインです
 - `birdnet` は 3 秒窓、`48 kHz` です。CPU 時は `birdnet.load("acoustic", "2.4", "tf")`、GPU 時は `birdnet.load("acoustic", "2.4", "pb")` を使います
+- 実行時の TensorFlow 警告を抑えたい場合は `TF_CPP_MIN_LOG_LEVEL=2 TF_ENABLE_ONEDNN_OPTS=0` を先頭に付けます
 - `perch` は 5 秒窓、`32 kHz`、`bioacoustics-model-zoo` の旧公式 `Perch.embed()` と clip DataFrame API を使います
 - `perch` は別マシン・別環境で実行し、生成物だけをこのリポジトリへ戻してください
 
