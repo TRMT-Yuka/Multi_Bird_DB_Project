@@ -951,6 +951,7 @@ def _build_audio_embeddings_perch(
                 "output_root": str(output_dir),
                 "run_dir": str(run_dir),
                 "model_name": model_name,
+                "model_label": model_name,
                 "device": device,
                 "resolved_device": getattr(encoder, "device", device),
                 "batch_size": batch_size,
@@ -1539,6 +1540,7 @@ def build_audio_embeddings(
     output_dir: Path,
     backend: str = "wav2vec2",
     model_name: str = DEFAULT_MODEL_NAME,
+    model_label: str | None = None,
     device: str = "auto",
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_seconds: float = DEFAULT_MAX_SECONDS,
@@ -1617,7 +1619,8 @@ def build_audio_embeddings(
                 f"target_sample_rate ({decode_sample_rate}) must match the encoder sample rate ({model_sample_rate}) for {backend}."
             )
 
-    run_root = output_dir / _safe_component(backend) / _safe_component(model_name)
+    output_model_label = model_label or model_name
+    run_root = output_dir / _safe_component(backend) / _safe_component(output_model_label)
     existing_items: dict[str, dict[str, Any]] = {}
     resume_source_run_count = 0
     if resume_existing:
@@ -1940,6 +1943,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-dir", default=str(paths.xeno_canto_raw_dir))
     parser.add_argument("--output-dir", default=str(paths.audio_embeddings_dir))
     parser.add_argument("--model-name", default=DEFAULT_MODEL_NAME)
+    parser.add_argument("--model-label", default="")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
@@ -1985,6 +1989,7 @@ def main(argv: list[str] | None = None) -> int:
         output_dir=Path(args.output_dir),
         backend=args.backend,
         model_name=args.model_name,
+        model_label=args.model_label or None,
         device=args.device,
         batch_size=args.batch_size,
         max_seconds=args.max_seconds,
