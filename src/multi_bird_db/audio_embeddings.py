@@ -314,6 +314,64 @@ def _load_existing_audio_items(
     return existing_items, compatible_run_count
 
 
+def _load_existing_failed_source_paths(
+    run_root: Path,
+    *,
+    input_dir: Path,
+    backend: str,
+    model_name: str,
+    max_seconds: float,
+    target_sample_rate: int,
+    window_seconds: float | None,
+    overlap_seconds: float | None,
+    extensions: tuple[str, ...],
+    include_partial: bool = False,
+) -> tuple[set[str], int]:
+    if not run_root.exists():
+        return set(), 0
+
+    failed_source_paths: set[str] = set()
+    compatible_run_count = 0
+    run_dirs = sorted((child for child in run_root.iterdir() if child.is_dir()), key=lambda item: item.name)
+    suffixes = [".partial", ""] if include_partial else [""]
+    for run_dir in run_dirs:
+        for suffix in suffixes:
+            metadata_path = run_dir / f"metadata{suffix}.json"
+            failed_items_path = run_dir / f"failed_items{suffix}.json"
+            required_paths = [metadata_path, failed_items_path]
+            if not all(path.exists() for path in required_paths):
+                continue
+
+            metadata = _read_json(metadata_path)
+            if not _resume_metadata_matches(
+                metadata,
+                input_dir=input_dir,
+                backend=backend,
+                model_name=model_name,
+                max_seconds=max_seconds,
+                target_sample_rate=target_sample_rate,
+                window_seconds=window_seconds,
+                overlap_seconds=overlap_seconds,
+                extensions=extensions,
+            ):
+                continue
+
+            failed_items = _read_json(failed_items_path)
+            if not isinstance(failed_items, list):
+                continue
+
+            compatible_run_count += 1
+            for item in failed_items:
+                if not isinstance(item, dict):
+                    continue
+                source_path = str(item.get("source_path") or "")
+                if not source_path:
+                    continue
+                failed_source_paths.add(_normalize_compare_path(source_path))
+
+    return failed_source_paths, compatible_run_count
+
+
 def discover_audio_files(input_dir: Path, extensions: tuple[str, ...] = DEFAULT_EXTENSIONS) -> list[Path]:
     """Return a sorted list of audio files under one directory tree. / 1 つのツリー内の音声ファイルを列挙する。"""
 
@@ -819,9 +877,23 @@ def _build_audio_embeddings_perch(
 
     run_root = output_dir / "perch" / _safe_component(model_name)
     existing_items: dict[str, dict[str, Any]] = {}
+    failed_source_paths: set[str] = set()
     resume_source_run_count = 0
+    resume_failed_source_run_count = 0
     if resume_existing:
         existing_items, resume_source_run_count = _load_existing_audio_items(
+            run_root,
+            input_dir=input_dir,
+            backend="perch",
+            model_name=model_name,
+            max_seconds=max_seconds,
+            target_sample_rate=DEFAULT_PERCH_SAMPLE_RATE,
+            window_seconds=5.0,
+            overlap_seconds=0.0,
+            extensions=extensions,
+            include_partial=True,
+        )
+        failed_source_paths, resume_failed_source_run_count = _load_existing_failed_source_paths(
             run_root,
             input_dir=input_dir,
             backend="perch",
@@ -849,6 +921,7 @@ def _build_audio_embeddings_perch(
     processed_files = 0
     batch_count = 0
     reused_item_count = 0
+    skipped_failed_count = 0
     new_item_count = 0
     last_progress_time = time.monotonic()
 
@@ -896,8 +969,10 @@ def _build_audio_embeddings_perch(
                 "decoder": "perch_clip_dataframe_api",
                 "resume_existing": resume_existing,
                 "reused_item_count": reused_item_count,
+                "skipped_failed_count": skipped_failed_count,
                 "new_item_count": new_item_count,
                 "resume_source_run_count": resume_source_run_count,
+                "resume_failed_source_run_count": resume_failed_source_run_count,
                 "processed_files": processed_files,
                 "total_files": total_files,
                 "batch_count": batch_count,
@@ -923,6 +998,7 @@ def _build_audio_embeddings_perch(
                 "processed_files": processed_files,
                 "total_files": total_files,
                 "batch_count": batch_count,
+                "skipped_failed_count": skipped_failed_count,
                 "reused_item_count": reused_item_count,
                 "new_item_count": new_item_count,
                 "checkpoint_reason": reason,
@@ -954,7 +1030,7 @@ def _build_audio_embeddings_perch(
         label = f" | {current_label}" if current_label else ""
         _render_progress_line(
             f"audio-perch | files {processed_files}/{total_files} | items {len(audio_ids) + len(pending_rows)} | "
-            f"reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
+            f"reused {reused_item_count} | skipped {skipped_failed_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
         )
         last_progress_time = now
 
@@ -994,6 +1070,12 @@ def _build_audio_embeddings_perch(
         qid = infer_qid(path, input_dir)
         base_audio_id = build_audio_id(path, qid, input_dir)
         relative_path = str(path.relative_to(input_dir)) if path.is_relative_to(input_dir) else str(path)
+        normalized_source_path = _normalize_compare_path(path)
+        if normalized_source_path in failed_source_paths:
+            skipped_failed_count += 1
+            processed_files += 1
+            report_progress(force=True, current_label=f"skip failed {path.name}")
+            continue
         try:
             duration_seconds = min(_probe_audio_duration_seconds(path), max_seconds) if max_seconds > 0 else _probe_audio_duration_seconds(path)
         except Exception as exc:
@@ -1058,7 +1140,7 @@ def _build_audio_embeddings_perch(
 
     if not embedding_rows:
         _finish_progress_line(
-            f"audio-perch done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+            f"audio-perch done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | skipped {skipped_failed_count} | failed {len(failed_rows)} | batches {batch_count}"
         )
         raise RuntimeError("No audio files could be embedded. Check the Perch setup and input files.")
 
@@ -1068,7 +1150,7 @@ def _build_audio_embeddings_perch(
     _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
     _write_json_atomic(run_dir / "failed_items.json", failed_rows)
     _finish_progress_line(
-        f"audio-perch done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+        f"audio-perch done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | skipped {skipped_failed_count} | failed {len(failed_rows)} | batches {batch_count}"
     )
 
     summary = {
@@ -1090,8 +1172,10 @@ def _build_audio_embeddings_perch(
         "successful_count": len(audio_ids),
         "resume_existing": resume_existing,
         "reused_item_count": reused_item_count,
+        "skipped_failed_count": skipped_failed_count,
         "new_item_count": new_item_count,
         "resume_source_run_count": resume_source_run_count,
+        "resume_failed_source_run_count": resume_failed_source_run_count,
         "output_files": {
             "embeddings_npy": str(run_dir / "embeddings.npy"),
             "audio_ids_json": str(run_dir / "audio_ids.json"),
@@ -1130,9 +1214,23 @@ def _build_audio_embeddings_birdnet(
 
     run_root = output_dir / "birdnet" / _safe_component(model_name)
     existing_items: dict[str, dict[str, Any]] = {}
+    failed_source_paths: set[str] = set()
     resume_source_run_count = 0
+    resume_failed_source_run_count = 0
     if resume_existing:
         existing_items, resume_source_run_count = _load_existing_audio_items(
+            run_root,
+            input_dir=input_dir,
+            backend="birdnet",
+            model_name=model_name,
+            max_seconds=max_seconds,
+            target_sample_rate=DEFAULT_BIRDNET_SAMPLE_RATE,
+            window_seconds=3.0,
+            overlap_seconds=0.0,
+            extensions=extensions,
+            include_partial=True,
+        )
+        failed_source_paths, resume_failed_source_run_count = _load_existing_failed_source_paths(
             run_root,
             input_dir=input_dir,
             backend="birdnet",
@@ -1157,6 +1255,7 @@ def _build_audio_embeddings_birdnet(
     processed_files = 0
     batch_count = 0
     reused_item_count = 0
+    skipped_failed_count = 0
     new_item_count = 0
     last_progress_time = time.monotonic()
 
@@ -1202,8 +1301,10 @@ def _build_audio_embeddings_birdnet(
                 "decoder": "birdnet_file_api",
                 "resume_existing": resume_existing,
                 "reused_item_count": reused_item_count,
+                "skipped_failed_count": skipped_failed_count,
                 "new_item_count": new_item_count,
                 "resume_source_run_count": resume_source_run_count,
+                "resume_failed_source_run_count": resume_failed_source_run_count,
                 "processed_files": processed_files,
                 "total_files": total_files,
                 "batch_count": batch_count,
@@ -1229,6 +1330,7 @@ def _build_audio_embeddings_birdnet(
                 "processed_files": processed_files,
                 "total_files": total_files,
                 "batch_count": batch_count,
+                "skipped_failed_count": skipped_failed_count,
                 "checkpoint_reason": reason,
                 "completed": False,
                 "embeddings_npy": str(run_dir / "embeddings.partial.npy"),
@@ -1248,7 +1350,7 @@ def _build_audio_embeddings_birdnet(
         label = f" | {current_label}" if current_label else ""
         _render_progress_line(
             f"audio-birdnet | files {processed_files}/{total_files} | items {len(audio_ids)} | "
-            f"reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
+            f"reused {reused_item_count} | skipped {skipped_failed_count} | failed {len(failed_rows)} | batches {batch_count}{label}"
         )
         last_progress_time = now
 
@@ -1363,6 +1465,11 @@ def _build_audio_embeddings_birdnet(
             processed_files += 1
             report_progress(force=True, current_label=f"reused {path.name}")
             continue
+        if normalized_source_path in failed_source_paths:
+            skipped_failed_count += 1
+            processed_files += 1
+            report_progress(force=True, current_label=f"skip failed {path.name}")
+            continue
         pending_paths.append(path)
         if len(pending_paths) >= max(1, batch_size):
             process_batch(pending_paths)
@@ -1371,7 +1478,7 @@ def _build_audio_embeddings_birdnet(
 
     if not embedding_rows:
         _finish_progress_line(
-            f"audio-birdnet done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+            f"audio-birdnet done | files {processed_files}/{total_files} | items 0 | reused {reused_item_count} | skipped {skipped_failed_count} | failed {len(failed_rows)} | batches {batch_count}"
         )
         raise RuntimeError("No audio files could be embedded. Check the BirdNET setup and input files.")
 
@@ -1381,7 +1488,7 @@ def _build_audio_embeddings_birdnet(
     _write_tsv_atomic(run_dir / "audio_manifest.tsv", manifest_rows, MANIFEST_COLUMNS + ["embedding_index"])
     _write_json_atomic(run_dir / "failed_items.json", failed_rows)
     _finish_progress_line(
-        f"audio-birdnet done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | failed {len(failed_rows)} | batches {batch_count}"
+        f"audio-birdnet done | files {processed_files}/{total_files} | items {len(audio_ids)} | reused {reused_item_count} | skipped {skipped_failed_count} | failed {len(failed_rows)} | batches {batch_count}"
     )
 
     summary = {
@@ -1403,8 +1510,10 @@ def _build_audio_embeddings_birdnet(
         "successful_count": len(audio_ids),
         "resume_existing": resume_existing,
         "reused_item_count": reused_item_count,
+        "skipped_failed_count": skipped_failed_count,
         "new_item_count": new_item_count,
         "resume_source_run_count": resume_source_run_count,
+        "resume_failed_source_run_count": resume_failed_source_run_count,
         "output_files": {
             "embeddings_npy": str(run_dir / "embeddings.npy"),
             "audio_ids_json": str(run_dir / "audio_ids.json"),

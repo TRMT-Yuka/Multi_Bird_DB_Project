@@ -171,7 +171,7 @@ conda run -n birdnet --no-capture-output env TF_CPP_MIN_LOG_LEVEL=2 TF_ENABLE_ON
 出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
 
 `birdnet` は BirdNET 公式の file-based `encode()` にファイルパスを直接渡し、3 秒分割も BirdNET 側に任せます。  
-`--resume-existing` を付けると、既存の `embeddings.*` だけでなく `*.partial.*` も読んで、完了済み音声をスキップしながら再開できます。バッチサイズ変更後の再開にも使えます。
+`--resume-existing` を付けると、既存の `embeddings.*` だけでなく `*.partial.*` も読んで、完了済み音声をスキップしながら再開できます。過去に `failed_items.json` に記録された音声は、再試行せず最初から除外します。バッチサイズ変更後の再開にも使えます。
 
 Perch を使う例:
 
@@ -200,6 +200,8 @@ PYTHONPATH=src python3 -m multi_bird_db.cli build-audio-embeddings \
 
 このコマンドは入力ディレクトリ配下を再帰的に走査し、旧公式 Perch なら 5 秒窓、`32 kHz` 相当の公式前処理で埋め込みを作ります。  
 ただしこのマシンでの動作確認は追わず、別マシン・別環境での実行を前提にします。出力は `data/external/embeddings/audio/<backend>/<model>/<MMDDhhmm>/` 配下に保存されます。
+
+GPU の確認だけをする場合:
 
 生成物:
 
