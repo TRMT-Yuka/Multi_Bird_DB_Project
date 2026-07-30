@@ -13,6 +13,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_EMBEDDING_ROOT = PROJECT_ROOT / "data" / "external" / "embeddings"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp3_sub1_audio"
+DEFAULT_SELECTED_RUNS_PATH = DEFAULT_EMBEDDING_ROOT / "selected_runs.json"
 NDCG_K_VALUES = (10, 50, 100)
 
 
@@ -64,6 +65,27 @@ def _write_tsv(path: Path, rows: Iterable[dict[str, object]], columns: list[str]
         for row in rows:
             writer.writerow({column: row.get(column, "") for column in columns})
 
+
+
+
+def load_selected_audio_runs(path: Path) -> list[AudioRun]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("selected_runs.json must contain an object.")
+    runs = payload.get("runs", {})
+    if not isinstance(runs, dict):
+        raise ValueError("selected_runs.json must contain a runs object.")
+    audio_entries = runs.get("audio", {})
+    if not isinstance(audio_entries, dict):
+        raise ValueError("selected_runs.json runs.audio must be an object.")
+
+    selected: list[AudioRun] = []
+    for label, value in audio_entries.items():
+        run_dir = Path(str(value)).expanduser()
+        if not run_dir.is_absolute():
+            run_dir = PROJECT_ROOT / run_dir
+        selected.append(AudioRun(name=str(label), path=run_dir))
+    return selected
 
 def discover_audio_runs(root: Path = DEFAULT_EMBEDDING_ROOT) -> list[AudioRun]:
     audio_root = root / "audio"
@@ -259,7 +281,14 @@ def run(args: argparse.Namespace) -> None:
     if not output_dir.is_absolute():
         output_dir = PROJECT_ROOT / output_dir
 
-    audio_runs = discover_audio_runs(embedding_root) if args.auto_discover else []
+    selected_runs_path = Path(args.selected_runs).expanduser()
+    if not selected_runs_path.is_absolute():
+        selected_runs_path = PROJECT_ROOT / selected_runs_path
+
+    if args.use_selected_runs and selected_runs_path.exists():
+        audio_runs = load_selected_audio_runs(selected_runs_path)
+    else:
+        audio_runs = discover_audio_runs(embedding_root) if args.auto_discover else []
     audio_runs.extend(parse_audio_run_paths(args.audio_run))
     if not audio_runs:
         raise SystemExit("No audio embedding runs found. Use --auto-discover or pass --audio-run.")
@@ -321,6 +350,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run EXP3-sub1 audio embedding retrieval evaluation.")
     parser.add_argument("--embedding-root", default=str(DEFAULT_EMBEDDING_ROOT))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--selected-runs", default=str(DEFAULT_SELECTED_RUNS_PATH))
+    parser.add_argument("--use-selected-runs", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--auto-discover", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--audio-run", action="append", default=[], help="Audio embedding run directory.")
     parser.add_argument("--max-items", type=int, default=None, help="Optional debug cap after loading audio items.")

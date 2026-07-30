@@ -79,6 +79,19 @@ experiments/root_short_reproduction/exp3_sub1_audio/
 - `<audio_run>_per_query.tsv`
 - `metadata.json`
 
+
+## Embedding run selection
+
+実験コードは既定で [data/external/embeddings/selected_runs.json](../../data/external/embeddings/selected_runs.json) を読みます。
+このファイルに、各埋め込み種類で最終版として採用する run ディレクトリを明示します。
+
+自動検出で全 run を拾いたい場合のみ、次のように `--no-use-selected-runs` を付けます。
+
+```bash
+python3 experiments/root_short_reproduction/src/exp1_similarity_matrices.py --no-use-selected-runs
+python3 experiments/root_short_reproduction/src/exp3_sub1_audio_pretraining.py --no-use-selected-runs
+```
+
 ## 現在のコード
 
 Experiment 1 用の通常実行コマンド:

@@ -13,6 +13,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_EMBEDDING_ROOT = PROJECT_ROOT / "data" / "external" / "embeddings"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp1_img"
+DEFAULT_SELECTED_RUNS_PATH = DEFAULT_EMBEDDING_ROOT / "selected_runs.json"
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,32 @@ def _load_embeddings(run_dir: Path) -> np.ndarray:
         raise ValueError(f"Expected 2D embeddings.npy: {run_dir / 'embeddings.npy'}")
     return np.asarray(matrix, dtype=np.float32)
 
+
+
+
+def _iter_selected_runs(payload: object) -> list[EmbeddingRun]:
+    if not isinstance(payload, dict):
+        raise ValueError("selected_runs.json must contain an object.")
+    runs = payload.get("runs", {})
+    if not isinstance(runs, dict):
+        raise ValueError("selected_runs.json must contain a runs object.")
+
+    selected: list[EmbeddingRun] = []
+    for modality in ("graph", "language", "audio"):
+        entries = runs.get(modality, {})
+        if not isinstance(entries, dict):
+            raise ValueError(f"selected_runs.json runs.{modality} must be an object.")
+        for label, value in entries.items():
+            run_dir = Path(str(value)).expanduser()
+            if not run_dir.is_absolute():
+                run_dir = PROJECT_ROOT / run_dir
+            selected.append(EmbeddingRun(name=f"{modality}__{label}", modality=modality, path=run_dir))
+    return selected
+
+
+def load_selected_runs(path: Path) -> list[EmbeddingRun]:
+    payload = _load_json(path)
+    return _iter_selected_runs(payload)
 
 def discover_graph_runs(root: Path = DEFAULT_EMBEDDING_ROOT) -> list[EmbeddingRun]:
     graph_root = root / "graph"
@@ -392,7 +419,13 @@ def run(args: argparse.Namespace) -> None:
     if not embedding_root.is_absolute():
         embedding_root = PROJECT_ROOT / embedding_root
 
-    if args.auto_discover:
+    selected_runs_path = Path(args.selected_runs).expanduser()
+    if not selected_runs_path.is_absolute():
+        selected_runs_path = PROJECT_ROOT / selected_runs_path
+
+    if args.use_selected_runs and selected_runs_path.exists():
+        runs = load_selected_runs(selected_runs_path)
+    elif args.auto_discover:
         runs = discover_all_runs(embedding_root)
     else:
         runs = []
@@ -433,6 +466,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--embedding-root", default=str(DEFAULT_EMBEDDING_ROOT))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--selected-runs", default=str(DEFAULT_SELECTED_RUNS_PATH))
+    parser.add_argument("--use-selected-runs", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--auto-discover", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--graph-run", action="append", default=[], help="Graph embedding run directory.")
     parser.add_argument("--language-run", action="append", default=[], help="Language embedding run directory.")
