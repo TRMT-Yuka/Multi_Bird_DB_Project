@@ -102,6 +102,31 @@ PYTHONPATH=src python3 -m multi_bird_db.cli download-audio-models \
 `wav2vec2` のモデルは既定で `data/external/models/audio/huggingface` に保存されます。  
 以後は同じ cache を使って再利用します。
 
+fine-tuned 5 fold モデルから埋め込みを作る場合:
+
+```bash
+source .venv_BirdDB/bin/activate
+make build-audio-embeddings-wav2vec2-finetuned
+```
+
+このコマンドは次のモデルを順に使います。
+
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_0`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_1`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_2`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_3`
+- `data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_4`
+
+出力先は次です。
+
+```text
+data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_0/
+data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_1/
+data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_2/
+data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_3/
+data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_4/
+```
+
 注意:
 
 - この実装では共通の音声 decode / resample を `ffmpeg` ベースで処理します

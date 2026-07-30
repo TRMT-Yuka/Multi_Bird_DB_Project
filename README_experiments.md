@@ -118,6 +118,16 @@ PYTHONPATH=src python3 -m multi_bird_db.cli finetune-wav2vec2-crossval --no-audi
 - `loss_curve.png`
 - `accuracy_curve.png`
 
+追加学習済みモデルから audio embedding を作る場合:
+
+```bash
+source .venv_BirdDB/bin/activate
+make build-audio-embeddings-wav2vec2-finetuned
+```
+
+出力先は `data/external/embeddings/audio/wav2vec2-finetuned/` です。
+各 fold は `wav2vec2-model_0` から `wav2vec2-model_4` のラベルで保存されます。
+
 ## 補足
 
 - `wav2vec2` は file 単位のベースラインです
