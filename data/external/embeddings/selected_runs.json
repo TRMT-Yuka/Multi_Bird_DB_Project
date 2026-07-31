@@ -14,19 +14,22 @@
       "ja": "data/external/embeddings/language/ja"
     },
     "audio": {
-      "wav2vec2_base": "data/external/embeddings/audio/wav2vec2/facebook_wav2vec2-base-960h/06300702"
+      "wav2vec2_base": "data/external/embeddings/audio/wav2vec2/facebook_wav2vec2-base-960h/06300702",
+      "wav2vec2_finetuned_model_0": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_0/07300813",
+      "wav2vec2_finetuned_model_1": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_1/07300858",
+      "wav2vec2_finetuned_model_2": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_2/07300942",
+      "wav2vec2_finetuned_model_3": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_3/07301028",
+      "wav2vec2_finetuned_model_4": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_4/07301111"
     }
   },
   "pending_runs": {
     "audio": {
-      "wav2vec2_finetuned_model_0": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_0/07300813",
-      "wav2vec2_finetuned_model_1": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_1/07300858",
       "birdnet_2_in_progress": "data/external/embeddings/audio/birdnet/birdnet_2-acoustic-2.4-pb"
     }
   },
   "notes": [
     "BirdNET is currently being regenerated with another model/run and is intentionally excluded from runs.audio for now.",
-    "wav2vec2 fine-tuned embedding runs are still being generated and should be moved from pending_runs to runs.audio only after embeddings.npy, qids.json, audio_manifest.tsv, and metadata.json exist.",
+    "wav2vec2 fine-tuned model_0..4 embedding runs are complete and selected for downstream experiments.",
     "Experiment code should prefer this file over auto-discovery when present."
   ]
 }

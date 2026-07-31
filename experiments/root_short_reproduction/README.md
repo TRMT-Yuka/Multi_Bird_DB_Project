@@ -80,6 +80,50 @@ experiments/root_short_reproduction/exp3_sub1_audio/
 - `metadata.json`
 
 
+### EXP3-main: Modality combination search
+
+`G`, `L`, `GL`, `A`, `GA`, `LA`, `GLA` などのモダリティ組合せを指定して retrieval 評価します。
+既定では、現在安全に動かせる `G`, `L`, `GL` を対象にします。
+
+通常実行コマンド:
+
+```bash
+make run-exp3-search
+```
+
+直接 Python を叩く場合:
+
+```bash
+python3 experiments/root_short_reproduction/src/exp3_search_performance.py
+```
+
+モダリティを指定する例:
+
+```bash
+python3 experiments/root_short_reproduction/src/exp3_search_performance.py --modalities G,L,GL
+python3 experiments/root_short_reproduction/src/exp3_search_performance.py --modalities LA,GLA
+```
+
+採用する埋め込み種類を限定する例:
+
+```bash
+python3 experiments/root_short_reproduction/src/exp3_search_performance.py --graph-runs node2vec,gcn
+python3 experiments/root_short_reproduction/src/exp3_search_performance.py --language-runs en
+python3 experiments/root_short_reproduction/src/exp3_search_performance.py --audio-runs wav2vec2_base
+```
+
+出力先:
+
+```text
+experiments/root_short_reproduction/exp3_search/
+```
+
+主な出力予定:
+
+- `metrics.tsv`
+- `<run_name>_per_query.tsv`
+- `metadata.json`
+
 ## Embedding run selection
 
 実験コードは既定で [data/external/embeddings/selected_runs.json](../../data/external/embeddings/selected_runs.json) を読みます。
