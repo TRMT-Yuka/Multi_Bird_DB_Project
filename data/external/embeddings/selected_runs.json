@@ -14,6 +14,8 @@
       "ja": "data/external/embeddings/language/ja"
     },
     "audio": {
+      "birdnet_acoustic_2_4_pb_07300911": "data/external/embeddings/audio/birdnet/birdnet-acoustic-2.4-pb/07300911",
+      "perch_07300906": "data/external/embeddings/audio/perch/perch/07300906",
       "wav2vec2_base": "data/external/embeddings/audio/wav2vec2/facebook_wav2vec2-base-960h/06300702",
       "wav2vec2_finetuned_model_0": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_0/07300813",
       "wav2vec2_finetuned_model_1": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_1/07300858",
@@ -23,12 +25,10 @@
     }
   },
   "pending_runs": {
-    "audio": {
-      "birdnet_2_in_progress": "data/external/embeddings/audio/birdnet/birdnet_2-acoustic-2.4-pb"
-    }
+    "audio": {}
   },
   "notes": [
-    "BirdNET is currently being regenerated with another model/run and is intentionally excluded from runs.audio for now.",
+    "BirdNET and Perch completion runs are now selected in runs.audio.",
     "wav2vec2 fine-tuned model_0..4 embedding runs are complete and selected for downstream experiments.",
     "Experiment code should prefer this file over auto-discovery when present."
   ]
