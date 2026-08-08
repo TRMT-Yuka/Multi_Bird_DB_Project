@@ -33,17 +33,17 @@ BirdNET のように1音声が複数windowに分かれる場合は、同一音�
 
 論文では各モダリティの類似度上位 95 percentile を edge とし、少なくとも1つのモダリティで現れた edge を統合しています。
 
-## Experiment 3: Search Performance With Multi-Modality
+## Experiment 3: Taxon classification probe with frozen embeddings
 
-目的は、`G`, `L`, `A` およびその組合せで検索性能がどう変わるかを評価することです。
+目的は、`G`, `L`, `A` およびその組合せの埋め込みが、`order` / `family` のような上位分類をどこまで表現できるかを見ることです。
+
+この実験では学習済み分類器は使わず、各サンプルに対して `k` 近傍の多数決でラベルを決めます。
+埋め込みは固定で、`k` だけを更新できるようにしています。
 
 評価指標は以下です。
 
-- `mAP`
-- `MRR`
-- `nDCG@10`
-- `nDCG@50`
-- `nDCG@100`
+- `accuracy`
+- `macro_f1`
 
 ### EXP3-sub1: Audio pretraining / fine-tuning comparison
 
@@ -80,48 +80,64 @@ experiments/root_short_reproduction/exp3_sub1_audio/
 - `metadata.json`
 
 
-### EXP3-main: Modality combination search
+### EXP3-main: k-nearest majority vote probe
 
-`G`, `L`, `GL`, `A`, `GA`, `LA`, `GLA` などのモダリティ組合せを指定して retrieval 評価します。
-既定では、現在安全に動かせる `G`, `L`, `GL` を対象にします。
+`G`, `L`, `GL`, `A`, `GA`, `LA`, `GLA` などのモダリティ組合せを指定して、`order` / `family` を分類します。
+既定では、全組み合わせを対象にします。
 
 通常実行コマンド:
 
 ```bash
 make run-exp3-search
+make run-exp3-taxon-probe
+```
+
+`k` を変える例:
+
+```bash
+make run-exp3-search EXP3_K=3
+make run-exp3-taxon-probe EXP3_K=3
+make run-exp3-search EXP3_K=7 EXP3_TARGET_RANKS=family
 ```
 
 直接 Python を叩く場合:
 
 ```bash
-python3 experiments/root_short_reproduction/exp3_search_performance.py
+python3 experiments/root_short_reproduction/exp3_taxon_probe.py --k 5 --target-ranks family,order
 ```
 
 モダリティを指定する例:
 
 ```bash
-python3 experiments/root_short_reproduction/exp3_search_performance.py --modalities G,L,GL
-python3 experiments/root_short_reproduction/exp3_search_performance.py --modalities LA,GLA
+python3 experiments/root_short_reproduction/exp3_taxon_probe.py --modalities G,L,GL,A,GA,LA,GLA
+python3 experiments/root_short_reproduction/exp3_taxon_probe.py --modalities LA,GLA
 ```
 
 採用する埋め込み種類を限定する例:
 
 ```bash
-python3 experiments/root_short_reproduction/exp3_search_performance.py --graph-runs node2vec,gcn
-python3 experiments/root_short_reproduction/exp3_search_performance.py --language-runs en
-python3 experiments/root_short_reproduction/exp3_search_performance.py --audio-runs wav2vec2_base
+python3 experiments/root_short_reproduction/exp3_taxon_probe.py --graph-runs node2vec,gcn
+python3 experiments/root_short_reproduction/exp3_taxon_probe.py --language-runs en
+python3 experiments/root_short_reproduction/exp3_taxon_probe.py --audio-runs wav2vec2_base
 ```
 
 出力先:
 
 ```text
-experiments/root_short_reproduction/exp3_search/
+experiments/root_short_reproduction/exp3_taxon_probe/
+```
+
+各結果は次のように `target_rank` を先頭にして格納します。
+
+```text
+experiments/root_short_reproduction/exp3_taxon_probe/family/G/
+experiments/root_short_reproduction/exp3_taxon_probe/order/GL/
 ```
 
 主な出力予定:
 
 - `metrics.tsv`
-- `<run_name>_per_query.tsv`
+- `predictions.tsv`
 - `metadata.json`
 
 ## Embedding run selection

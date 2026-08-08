@@ -2,8 +2,11 @@ PYTHON ?= python3
 PYTHONPATH := src
 EXTRACT_DUMP_JSON_ARGS ?=
 EMBEDDING_ALGORITHM ?= node2vec
+EXP3_K ?= 5
+EXP3_TARGET_RANKS ?= family,order
+EXP3_ARGS ?=
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-gpu build-audio-embeddings-wav2vec2 build-audio-embeddings-wav2vec2-finetuned finetune-wav2vec2-crossval repair-xeno-canto-audio build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings inspect-multimodal-sources run-multimodal-baseline run-exp1-simmatrix run-exp3-sub1-audio run-exp3-search build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-gpu build-audio-embeddings-wav2vec2 build-audio-embeddings-wav2vec2-finetuned finetune-wav2vec2-crossval repair-xeno-canto-audio build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings inspect-multimodal-sources run-multimodal-baseline run-exp1-simmatrix run-exp3-sub1-audio run-exp3-search run-exp3-taxon-probe build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -108,7 +111,9 @@ run-exp3-sub1-audio:
 	$(PYTHON) experiments/root_short_reproduction/exp3_sub1_audio_pretraining.py
 
 run-exp3-search:
-	$(PYTHON) experiments/root_short_reproduction/exp3_search_performance.py
+	$(PYTHON) experiments/root_short_reproduction/exp3_taxon_probe.py --k $(EXP3_K) --target-ranks $(EXP3_TARGET_RANKS) $(EXP3_ARGS)
+
+run-exp3-taxon-probe: run-exp3-search
 
 build-language-surface-manifest:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-language-surface-manifest
