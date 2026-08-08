@@ -64,7 +64,7 @@ make run-exp3-sub1-audio
 直接 Python を叩く場合:
 
 ```bash
-python3 experiments/root_short_reproduction/src/exp3_sub1_audio_pretraining.py
+python3 experiments/root_short_reproduction/exp3_sub1_audio_pretraining.py
 ```
 
 出力先:
@@ -94,22 +94,22 @@ make run-exp3-search
 直接 Python を叩く場合:
 
 ```bash
-python3 experiments/root_short_reproduction/src/exp3_search_performance.py
+python3 experiments/root_short_reproduction/exp3_search_performance.py
 ```
 
 モダリティを指定する例:
 
 ```bash
-python3 experiments/root_short_reproduction/src/exp3_search_performance.py --modalities G,L,GL
-python3 experiments/root_short_reproduction/src/exp3_search_performance.py --modalities LA,GLA
+python3 experiments/root_short_reproduction/exp3_search_performance.py --modalities G,L,GL
+python3 experiments/root_short_reproduction/exp3_search_performance.py --modalities LA,GLA
 ```
 
 採用する埋め込み種類を限定する例:
 
 ```bash
-python3 experiments/root_short_reproduction/src/exp3_search_performance.py --graph-runs node2vec,gcn
-python3 experiments/root_short_reproduction/src/exp3_search_performance.py --language-runs en
-python3 experiments/root_short_reproduction/src/exp3_search_performance.py --audio-runs wav2vec2_base
+python3 experiments/root_short_reproduction/exp3_search_performance.py --graph-runs node2vec,gcn
+python3 experiments/root_short_reproduction/exp3_search_performance.py --language-runs en
+python3 experiments/root_short_reproduction/exp3_search_performance.py --audio-runs wav2vec2_base
 ```
 
 出力先:
@@ -132,8 +132,8 @@ experiments/root_short_reproduction/exp3_search/
 自動検出で全 run を拾いたい場合のみ、次のように `--no-use-selected-runs` を付けます。
 
 ```bash
-python3 experiments/root_short_reproduction/src/exp1_similarity_matrices.py --no-use-selected-runs
-python3 experiments/root_short_reproduction/src/exp3_sub1_audio_pretraining.py --no-use-selected-runs
+python3 experiments/root_short_reproduction/exp1_similarity_matrices.py --no-use-selected-runs
+python3 experiments/root_short_reproduction/exp3_sub1_audio_pretraining.py --no-use-selected-runs
 ```
 
 ## 現在のコード
@@ -147,7 +147,7 @@ make run-exp1-simmatrix
 直接 Python を叩く場合:
 
 ```bash
-python3 experiments/root_short_reproduction/src/exp1_similarity_matrices.py
+python3 experiments/root_short_reproduction/exp1_similarity_matrices.py
 ```
 
 このコマンドを実行すると、既定では以下に出力します。

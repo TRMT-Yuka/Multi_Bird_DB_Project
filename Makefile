@@ -102,13 +102,13 @@ run-multimodal-baseline:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli run-multimodal-baseline
 
 run-exp1-simmatrix:
-	$(PYTHON) experiments/root_short_reproduction/src/exp1_similarity_matrices.py
+	$(PYTHON) experiments/root_short_reproduction/exp1_similarity_matrices.py
 
 run-exp3-sub1-audio:
-	$(PYTHON) experiments/root_short_reproduction/src/exp3_sub1_audio_pretraining.py
+	$(PYTHON) experiments/root_short_reproduction/exp3_sub1_audio_pretraining.py
 
 run-exp3-search:
-	$(PYTHON) experiments/root_short_reproduction/src/exp3_search_performance.py
+	$(PYTHON) experiments/root_short_reproduction/exp3_search_performance.py
 
 build-language-surface-manifest:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-language-surface-manifest
