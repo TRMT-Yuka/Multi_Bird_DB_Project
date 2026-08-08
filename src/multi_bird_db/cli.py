@@ -79,6 +79,11 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         module="multi_bird_db.graph",
         handler_name="main",
     ),
+    "build-taxon-labels": CommandSpec(
+        help="Build cached QID to upper-taxon label tables.",
+        module="multi_bird_db.taxon_labels",
+        handler_name="main",
+    ),
     "build-sqlite": CommandSpec(
         help="Build a lightweight SQLite DB from ontology PKL.",
         module="multi_bird_db.sqlite_store",

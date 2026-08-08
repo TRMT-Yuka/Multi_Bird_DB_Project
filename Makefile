@@ -5,8 +5,12 @@ EMBEDDING_ALGORITHM ?= node2vec
 EXP3_K ?= 5
 EXP3_TARGET_RANKS ?= family,order
 EXP3_ARGS ?=
+TAXON_RANKS ?= order,family
+TAXON_GRAPH_INPUT ?=
+TAXON_ONTOLOGY_INPUT ?=
+TAXON_OUTPUT_DIR ?=
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-gpu build-audio-embeddings-wav2vec2 build-audio-embeddings-wav2vec2-finetuned finetune-wav2vec2-crossval repair-xeno-canto-audio build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings inspect-multimodal-sources run-multimodal-baseline run-exp1-simmatrix run-exp3-sub1-audio run-exp3-search run-exp3-taxon-probe build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-gpu build-audio-embeddings-wav2vec2 build-audio-embeddings-wav2vec2-finetuned finetune-wav2vec2-crossval repair-xeno-canto-audio build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-taxon-labels build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings evaluate-graph-embeddings inspect-multimodal-sources run-multimodal-baseline run-exp1-simmatrix run-exp3-sub1-audio run-exp3-search run-exp3-taxon-probe build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -73,6 +77,9 @@ build-audio-embeddings-perch:
 
 build-graph:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-graph
+
+build-taxon-labels:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-taxon-labels --ranks $(TAXON_RANKS) $(if $(TAXON_GRAPH_INPUT),--graph-input $(TAXON_GRAPH_INPUT),) $(if $(TAXON_ONTOLOGY_INPUT),--ontology-input $(TAXON_ONTOLOGY_INPUT),) $(if $(TAXON_OUTPUT_DIR),--output-dir $(TAXON_OUTPUT_DIR),)
 
 build-sqlite:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-sqlite

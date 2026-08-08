@@ -184,26 +184,43 @@ experiments/root_short_reproduction/exp1_img/
 
 このREADME作成時点では、コードのみを追加し、行列・画像はまだ生成していません。
 
-## Planned taxonomy label export
+## Taxon label export
 
-`QID -> order/family` の対応を永続化するため、将来的には次のファイルを作る予定です。
+`QID -> order/family` の対応は次の実コマンドで永続化できます。
+
+保存先:
 
 - `data/processed/taxonomy/qid_taxon_labels.tsv`
 - `data/processed/taxonomy/qid_taxon_labels.json`
 - `data/processed/taxonomy/qid_taxon_labels.meta.json`
 
-想定する生成順は次の通りです。
+通常実行コマンド:
 
-1. `make build-ontology`
-2. `make build-graph`
-3. `make build-taxon-labels`
+```bash
+make build-taxon-labels
+```
 
-予定している `build-taxon-labels` の引数は次の形です。
+ランクや入力を変える例:
 
 ```bash
 make build-taxon-labels TAXON_RANKS=order,family
-python3 -m multi_bird_db.cli build-taxon-labels --ranks order,family
+make build-taxon-labels TAXON_GRAPH_INPUT=data/processed/graph/bird_taxonomy_graph.pkl
+make build-taxon-labels TAXON_ONTOLOGY_INPUT=data/processed/bird_ontology.pkl
 ```
 
-生成の起点は taxonomy graph で、`parent_taxon` をたどって `taxon_rank_name` が `order` / `family` に一致する祖先を保存します。
-graph が無い場合でも、ontology から graph を作れば再生成できる想定です。
+直接 Python を叩く場合:
+
+```bash
+python3 -m multi_bird_db.cli build-taxon-labels
+```
+
+上位ランクを変える例:
+
+```bash
+make build-taxon-labels
+python3 -m multi_bird_db.cli build-taxon-labels --ranks order,family
+python3 -m multi_bird_db.cli build-taxon-labels --ranks order
+```
+
+生成の起点は taxonomy graph で、`parent_taxon` をたどって `taxon_rank_name` が指定ランクに一致する祖先を保存します。
+graph が無い場合でも、`ontology` があればそこから graph を組み立てて再生成できます。

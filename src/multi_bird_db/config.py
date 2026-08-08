@@ -31,6 +31,10 @@ class ProjectPaths:
     graph_dir: Path
     taxonomy_graph_pkl: Path
     taxonomy_graph_html_dir: Path
+    taxonomy_labels_dir: Path
+    qid_taxon_labels_tsv: Path
+    qid_taxon_labels_json: Path
+    qid_taxon_labels_meta_json: Path
     embeddings_dir: Path
     graph_embeddings_dir: Path
     raw_audio_dir: Path
@@ -60,6 +64,7 @@ def get_project_paths() -> ProjectPaths:
     audio_dir = root / "data" / "external" / "audio"
     audio_embeddings_dir = embeddings_dir / "audio"
     graph_dir = processed_dir / "graph"
+    taxonomy_labels_dir = processed_dir / "taxonomy"
     documents_dir = root / "data" / "external" / "documents"
     sqlite_dir = root / "data" / "external" / "sqlite"
     wikipedia_dir = documents_dir / "wikipedia"
@@ -89,6 +94,10 @@ def get_project_paths() -> ProjectPaths:
         graph_dir=graph_dir,
         taxonomy_graph_pkl=graph_dir / "bird_taxonomy_graph.pkl",
         taxonomy_graph_html_dir=graph_dir / "dash",
+        taxonomy_labels_dir=taxonomy_labels_dir,
+        qid_taxon_labels_tsv=taxonomy_labels_dir / "qid_taxon_labels.tsv",
+        qid_taxon_labels_json=taxonomy_labels_dir / "qid_taxon_labels.json",
+        qid_taxon_labels_meta_json=taxonomy_labels_dir / "qid_taxon_labels.meta.json",
         embeddings_dir=embeddings_dir,
         graph_embeddings_dir=embeddings_dir / "graph",
         raw_audio_dir=raw_audio_dir,
