@@ -24,7 +24,6 @@ from exp1_similarity_matrices import (  # noqa: E402
     _read_tsv,
 )
 from exp3_sub1_audio_pretraining import load_audio_items  # noqa: E402
-from multi_bird_db.config import get_project_paths  # noqa: E402
 from multi_bird_db.multimodal.evaluate import evaluate_predictions  # noqa: E402
 from multi_bird_db.multimodal.types import MultimodalSampleRow  # noqa: E402
 from multi_bird_db.taxon_labels import load_cached_taxon_labels  # noqa: E402
@@ -32,6 +31,7 @@ from multi_bird_db.taxon_labels import load_cached_taxon_labels  # noqa: E402
 
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp3_taxon_probe"
 DEFAULT_SELECTED_RUNS_PATH = PROJECT_ROOT / "data" / "external" / "embeddings" / "selected_runs.json"
+DEFAULT_TAXON_LABELS_PATH = PROJECT_ROOT / "data" / "processed" / "taxonomy" / "qid_taxon_labels.tsv"
 DEFAULT_TARGET_RANKS = "family,order"
 
 
@@ -402,6 +402,15 @@ def run(args: argparse.Namespace) -> None:
     graph_filter = _normalize_filter_values(args.graph_runs)
     language_filter = _normalize_filter_values(args.language_runs)
     audio_filter = _normalize_filter_values(args.audio_runs)
+    taxon_labels_path = Path(args.taxon_labels).expanduser()
+    if not taxon_labels_path.is_absolute():
+        taxon_labels_path = PROJECT_ROOT / taxon_labels_path
+    if not taxon_labels_path.exists():
+        raise SystemExit(
+            f"Taxon label cache does not exist: {taxon_labels_path}\n"
+            "Run `make build-taxon-labels` before EXP3."
+        )
+    labels_by_qid = load_cached_taxon_labels(taxon_labels_path, target_ranks)
 
     bundles = load_bundles(
         selected_runs_path,
@@ -413,20 +422,6 @@ def run(args: argparse.Namespace) -> None:
     if not specs:
         raise SystemExit("No runnable EXP3 specs. Check --modalities and run filters.")
 
-    project_paths = get_project_paths()
-    taxon_label_cache_path = project_paths.qid_taxon_labels_tsv
-    cached_labels: dict[str, dict[str, dict[str, object] | None]] | None = None
-    if taxon_label_cache_path.exists():
-        cached_labels = load_cached_taxon_labels(taxon_label_cache_path, target_ranks)
-    taxonomy_graph = None
-    taxonomy_graph_path = Path(args.taxonomy_graph).expanduser() if args.taxonomy_graph else project_paths.taxonomy_graph_pkl
-    if not taxonomy_graph_path.is_absolute():
-        taxonomy_graph_path = PROJECT_ROOT / taxonomy_graph_path
-    if cached_labels is None:
-        from multi_bird_db.embeddings import load_graph  # noqa: PLC0415
-
-        taxonomy_graph = load_graph(taxonomy_graph_path)
-
     summary_rows: list[dict[str, object]] = []
     prediction_rows: list[dict[str, object]] = []
     metadata_specs: list[dict[str, object]] = []
@@ -434,29 +429,6 @@ def run(args: argparse.Namespace) -> None:
 
     for spec in specs:
         for target_rank in target_ranks:
-            if cached_labels is None:
-                from multi_bird_db.multimodal.labels import assign_labels_for_qids  # noqa: PLC0415
-
-                common_qids: set[str] | None = None
-                for bundle in spec.bundles:
-                    qids = set(bundle.items_by_qid)
-                    common_qids = qids if common_qids is None else common_qids & qids
-                if not common_qids:
-                    continue
-                resolved = assign_labels_for_qids(taxonomy_graph, sorted(common_qids), target_rank)
-                labels_by_qid = {
-                    assignment.qid: {
-                        target_rank: {
-                            "label_qid": assignment.label_qid,
-                            "label_name": assignment.label_name,
-                            "distance_to_label": assignment.distance_to_label,
-                        }
-                    }
-                    for assignment in resolved
-                }
-            else:
-                labels_by_qid = cached_labels
-
             samples = build_probe_samples(spec, labels_by_qid=labels_by_qid, target_rank=target_rank)
             if len(samples) < 2:
                 continue
@@ -652,7 +624,7 @@ def run(args: argparse.Namespace) -> None:
             "k": args.k,
             "batch_size": args.batch_size,
             "selected_runs": str(selected_runs_path),
-            "taxonomy_graph": str(taxonomy_graph_path),
+            "taxon_labels": str(taxon_labels_path),
             "modalities": modality_patterns,
             "graph_runs": sorted(graph_filter) if graph_filter else "all selected",
             "language_runs": sorted(language_filter) if language_filter else "all selected",
@@ -670,7 +642,11 @@ def run(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run EXP3 taxon classification with k-nearest majority vote.")
     parser.add_argument("--selected-runs", default=str(DEFAULT_SELECTED_RUNS_PATH))
-    parser.add_argument("--taxonomy-graph", default=None, help="Path to bird taxonomy graph PKL.")
+    parser.add_argument(
+        "--taxon-labels",
+        default=str(DEFAULT_TAXON_LABELS_PATH),
+        help="Path to cached qid_taxon_labels.tsv generated by build-taxon-labels.",
+    )
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument(
         "--modalities",

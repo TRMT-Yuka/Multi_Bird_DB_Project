@@ -33,12 +33,14 @@ BirdNET のように1音声が複数windowに分かれる場合は、同一音�
 
 論文では各モダリティの類似度上位 95 percentile を edge とし、少なくとも1つのモダリティで現れた edge を統合しています。
 
-## Experiment 3: Taxon classification probe with frozen embeddings
+## Experiment 3: Cached taxon-label prediction with frozen embeddings
 
-目的は、`G`, `L`, `A` およびその組合せの埋め込みが、`order` / `family` のような上位分類をどこまで表現できるかを見ることです。
+目的は、`G`, `L`, `A` およびその組合せの埋め込みが、`order` / `family` のような上位分類ラベルをどこまで予測できるかを見ることです。
 
 この実験では学習済み分類器は使わず、各サンプルに対して `k` 近傍の多数決でラベルを決めます。
 埋め込みは固定で、`k` だけを更新できるようにしています。
+実行前に [data/processed/taxonomy/qid_taxon_labels.tsv](../../data/processed/taxonomy/qid_taxon_labels.tsv) を作成してください。
+作成には `make build-taxon-labels` を先に実行します。
 
 評価指標は以下です。
 
@@ -226,4 +228,4 @@ python3 -m multi_bird_db.cli build-taxon-labels --ranks order
 ```
 
 生成の起点は taxonomy graph で、`parent_taxon` をたどって `taxon_rank_name` が指定ランクに一致する祖先を保存します。
-EXP3 はこのキャッシュを優先的に読みます。キャッシュが無い場合でも、`ontology` があればそこから graph を組み立てて再生成できます。
+EXP3 はこのキャッシュを必須で読みます。キャッシュが無い場合は `make build-taxon-labels` を先に実行してください。
