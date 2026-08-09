@@ -70,7 +70,7 @@ def load_cached_taxon_labels(tsv_path: Path, ranks: list[str]) -> dict[str, dict
         cache[qid] = {}
         for rank in normalized_ranks:
             label_qid = str(row.get(f"{rank}_qid") or "").strip()
-            label_name = str(row.get(f"{rank}_name") or "").strip()
+            label_name = str(row.get(f"{rank}_label") or row.get(f"{rank}_name") or "").strip()
             distance_raw = str(row.get(f"{rank}_distance") or "").strip()
             if not label_qid and not label_name and not distance_raw:
                 cache[qid][rank] = None
@@ -147,13 +147,13 @@ def build_taxon_labels(
             label = row.labels.get(rank)
             if label is None:
                 tsv_row[f"{rank}_qid"] = ""
-                tsv_row[f"{rank}_name"] = ""
+                tsv_row[f"{rank}_label"] = ""
                 tsv_row[f"{rank}_distance"] = ""
                 missing_ranks.append(rank)
                 json_payload[row.qid][rank] = None
                 continue
             tsv_row[f"{rank}_qid"] = label["label_qid"]
-            tsv_row[f"{rank}_name"] = label["label_name"]
+            tsv_row[f"{rank}_label"] = label["label_name"]
             tsv_row[f"{rank}_distance"] = label["distance_to_label"]
             json_payload[row.qid][rank] = label
         tsv_row["complete_rank_count"] = sum(1 for rank in normalized_ranks if row.labels.get(rank))
@@ -163,7 +163,7 @@ def build_taxon_labels(
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     columns = ["qid"]
     for rank in normalized_ranks:
-        columns.extend([f"{rank}_qid", f"{rank}_name", f"{rank}_distance"])
+        columns.extend([f"{rank}_qid", f"{rank}_label", f"{rank}_distance"])
     columns.extend(["complete_rank_count", "missing_ranks"])
 
     output_dir.mkdir(parents=True, exist_ok=True)

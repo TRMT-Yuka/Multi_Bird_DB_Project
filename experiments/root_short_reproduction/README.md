@@ -194,6 +194,9 @@ experiments/root_short_reproduction/exp1_img/
 - `data/processed/taxonomy/qid_taxon_labels.json`
 - `data/processed/taxonomy/qid_taxon_labels.meta.json`
 
+一覧を見るなら、まず `data/processed/taxonomy/qid_taxon_labels.tsv` を見てください。
+`qid` ごとの `order_qid` / `order_label` / `family_qid` / `family_label` が入っています。
+
 通常実行コマンド:
 
 ```bash
