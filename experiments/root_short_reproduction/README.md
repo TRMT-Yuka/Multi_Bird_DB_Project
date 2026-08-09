@@ -223,4 +223,4 @@ python3 -m multi_bird_db.cli build-taxon-labels --ranks order
 ```
 
 生成の起点は taxonomy graph で、`parent_taxon` をたどって `taxon_rank_name` が指定ランクに一致する祖先を保存します。
-graph が無い場合でも、`ontology` があればそこから graph を組み立てて再生成できます。
+EXP3 はこのキャッシュを優先的に読みます。キャッシュが無い場合でも、`ontology` があればそこから graph を組み立てて再生成できます。

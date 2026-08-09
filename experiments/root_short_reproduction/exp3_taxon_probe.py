@@ -25,10 +25,9 @@ from exp1_similarity_matrices import (  # noqa: E402
 )
 from exp3_sub1_audio_pretraining import load_audio_items  # noqa: E402
 from multi_bird_db.config import get_project_paths  # noqa: E402
-from multi_bird_db.embeddings import load_graph  # noqa: E402
 from multi_bird_db.multimodal.evaluate import evaluate_predictions  # noqa: E402
-from multi_bird_db.multimodal.labels import assign_labels_for_qids  # noqa: E402
 from multi_bird_db.multimodal.types import MultimodalSampleRow  # noqa: E402
+from multi_bird_db.taxon_labels import load_cached_taxon_labels  # noqa: E402
 
 
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp3_taxon_probe"
@@ -240,7 +239,12 @@ def _representative_item(items: list[VectorItem]) -> VectorItem:
     return items[0]
 
 
-def build_probe_samples(spec: EvaluationSpec, taxonomy_graph, target_rank: str) -> list[ProbeSample]:
+def build_probe_samples(
+    spec: EvaluationSpec,
+    *,
+    labels_by_qid: dict[str, dict[str, dict[str, object] | None]],
+    target_rank: str,
+) -> list[ProbeSample]:
     common_qids: set[str] | None = None
     for bundle in spec.bundles:
         qids = set(bundle.items_by_qid)
@@ -248,7 +252,11 @@ def build_probe_samples(spec: EvaluationSpec, taxonomy_graph, target_rank: str) 
     if not common_qids:
         return []
 
-    assignments = {assignment.qid: assignment for assignment in assign_labels_for_qids(taxonomy_graph, sorted(common_qids), target_rank)}
+    assignments = {
+        qid: labels_by_qid.get(qid, {}).get(target_rank)
+        for qid in sorted(common_qids)
+        if labels_by_qid.get(qid, {}).get(target_rank)
+    }
     if not assignments:
         return []
 
@@ -265,8 +273,8 @@ def build_probe_samples(spec: EvaluationSpec, taxonomy_graph, target_rank: str) 
             audio_embedding_index=None,
             language_embedding_index=None,
             modality_pattern=spec.modalities,
-            target_rank=assignment.target_rank,
-            target_label=assignment.label_name,
+            target_rank=target_rank,
+            target_label=str(assignment["label_name"]),
         )
         samples.append(ProbeSample(row=row, vector=vector))
     return samples
@@ -405,10 +413,19 @@ def run(args: argparse.Namespace) -> None:
     if not specs:
         raise SystemExit("No runnable EXP3 specs. Check --modalities and run filters.")
 
-    taxonomy_graph_path = Path(args.taxonomy_graph).expanduser() if args.taxonomy_graph else get_project_paths().taxonomy_graph_pkl
+    project_paths = get_project_paths()
+    taxon_label_cache_path = project_paths.qid_taxon_labels_tsv
+    cached_labels: dict[str, dict[str, dict[str, object] | None]] | None = None
+    if taxon_label_cache_path.exists():
+        cached_labels = load_cached_taxon_labels(taxon_label_cache_path, target_ranks)
+    taxonomy_graph = None
+    taxonomy_graph_path = Path(args.taxonomy_graph).expanduser() if args.taxonomy_graph else project_paths.taxonomy_graph_pkl
     if not taxonomy_graph_path.is_absolute():
         taxonomy_graph_path = PROJECT_ROOT / taxonomy_graph_path
-    taxonomy_graph = load_graph(taxonomy_graph_path)
+    if cached_labels is None:
+        from multi_bird_db.embeddings import load_graph  # noqa: PLC0415
+
+        taxonomy_graph = load_graph(taxonomy_graph_path)
 
     summary_rows: list[dict[str, object]] = []
     prediction_rows: list[dict[str, object]] = []
@@ -417,7 +434,30 @@ def run(args: argparse.Namespace) -> None:
 
     for spec in specs:
         for target_rank in target_ranks:
-            samples = build_probe_samples(spec, taxonomy_graph, target_rank)
+            if cached_labels is None:
+                from multi_bird_db.multimodal.labels import assign_labels_for_qids  # noqa: PLC0415
+
+                common_qids: set[str] | None = None
+                for bundle in spec.bundles:
+                    qids = set(bundle.items_by_qid)
+                    common_qids = qids if common_qids is None else common_qids & qids
+                if not common_qids:
+                    continue
+                resolved = assign_labels_for_qids(taxonomy_graph, sorted(common_qids), target_rank)
+                labels_by_qid = {
+                    assignment.qid: {
+                        target_rank: {
+                            "label_qid": assignment.label_qid,
+                            "label_name": assignment.label_name,
+                            "distance_to_label": assignment.distance_to_label,
+                        }
+                    }
+                    for assignment in resolved
+                }
+            else:
+                labels_by_qid = cached_labels
+
+            samples = build_probe_samples(spec, labels_by_qid=labels_by_qid, target_rank=target_rank)
             if len(samples) < 2:
                 continue
             predicted_labels, per_query_rows = predict_knn_majority(samples, k=args.k, batch_size=args.batch_size)

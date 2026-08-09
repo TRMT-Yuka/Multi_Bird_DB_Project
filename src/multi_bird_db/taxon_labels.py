@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import pickle
 from dataclasses import dataclass
@@ -31,8 +32,6 @@ def _write_json(path: Path, payload: object) -> None:
 
 
 def _write_tsv(path: Path, rows: list[dict[str, object]], columns: list[str]) -> None:
-    import csv
-
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, delimiter="\t")
@@ -53,6 +52,39 @@ def _normalize_ranks(ranks: list[str]) -> list[str]:
     if not normalized:
         raise ValueError("At least one rank must be specified.")
     return normalized
+
+
+def load_cached_taxon_labels(tsv_path: Path, ranks: list[str]) -> dict[str, dict[str, dict[str, Any] | None]]:
+    normalized_ranks = _normalize_ranks(ranks)
+    if not tsv_path.exists():
+        raise FileNotFoundError(f"Taxon label cache does not exist: {tsv_path}")
+
+    with tsv_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle, delimiter="\t"))
+
+    cache: dict[str, dict[str, dict[str, Any] | None]] = {}
+    for row in rows:
+        qid = str(row.get("qid") or "").strip()
+        if not qid:
+            continue
+        cache[qid] = {}
+        for rank in normalized_ranks:
+            label_qid = str(row.get(f"{rank}_qid") or "").strip()
+            label_name = str(row.get(f"{rank}_name") or "").strip()
+            distance_raw = str(row.get(f"{rank}_distance") or "").strip()
+            if not label_qid and not label_name and not distance_raw:
+                cache[qid][rank] = None
+                continue
+            try:
+                distance = int(distance_raw)
+            except ValueError:
+                distance = None
+            cache[qid][rank] = {
+                "label_qid": label_qid,
+                "label_name": label_name,
+                "distance_to_label": distance,
+            }
+    return cache
 
 
 def _load_taxonomy_graph(*, graph_input: Path, ontology_input: Path | None, root_qid: str) -> nx.DiGraph:
