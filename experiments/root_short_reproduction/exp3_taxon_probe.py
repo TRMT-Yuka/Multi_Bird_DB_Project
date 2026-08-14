@@ -5,12 +5,17 @@ import csv
 import json
 import itertools
 import sys
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 import numpy as np
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:  # pragma: no cover - fallback for minimal environments
+    def tqdm(iterable, **_kwargs):  # type: ignore[misc]
+        return iterable
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -24,7 +29,6 @@ from exp1_similarity_matrices import (  # noqa: E402
     _read_tsv,
 )
 from exp3_sub1_audio_pretraining import load_audio_items  # noqa: E402
-from multi_bird_db.multimodal.evaluate import evaluate_predictions  # noqa: E402
 from multi_bird_db.multimodal.types import MultimodalSampleRow  # noqa: E402
 from multi_bird_db.taxon_labels import load_cached_taxon_labels  # noqa: E402
 
@@ -33,6 +37,7 @@ DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / 
 DEFAULT_SELECTED_RUNS_PATH = PROJECT_ROOT / "data" / "external" / "embeddings" / "selected_runs.json"
 DEFAULT_TAXON_LABELS_PATH = PROJECT_ROOT / "data" / "processed" / "taxonomy" / "qid_taxon_labels.tsv"
 DEFAULT_TARGET_RANKS = "family,order"
+DEFAULT_TOP_K = 10
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,23 @@ class EvaluationSpec:
 class ProbeSample:
     row: MultimodalSampleRow
     vector: np.ndarray
+
+
+@dataclass(frozen=True)
+class RankingSummary:
+    query_count: int
+    evaluated_query_count: int
+    precision_at_1: float
+    precision_at_5: float
+    precision_at_10: float
+    recall_at_1: float
+    recall_at_5: float
+    recall_at_10: float
+    f1_at_1: float
+    f1_at_5: float
+    f1_at_10: float
+    mean_average_precision_at_10: float
+    mean_reciprocal_rank: float
 
 
 def _safe_name(value: str) -> str:
@@ -285,108 +307,165 @@ def _normalize_rows(vectors: np.ndarray) -> np.ndarray:
     return vectors / np.maximum(norms, 1e-12)
 
 
-def _majority_vote(labels: list[str], similarities: list[float]) -> tuple[str, dict[str, int]]:
-    counts = Counter(labels)
-    best_count = max(counts.values())
-    tied_labels = [label for label, count in counts.items() if count == best_count]
-    if len(tied_labels) == 1:
-        return tied_labels[0], dict(counts)
-
-    best_label = tied_labels[0]
-    best_similarity = float("-inf")
-    for label in tied_labels:
-        first_similarity = next(similarity for voted_label, similarity in zip(labels, similarities, strict=True) if voted_label == label)
-        if first_similarity > best_similarity or (first_similarity == best_similarity and label < best_label):
-            best_label = label
-            best_similarity = first_similarity
-    return best_label, dict(counts)
-
-
-def _ranking_metrics(
-    neighbor_labels: list[str],
-    true_label: str,
-    *,
+def _prefix_precision_recall(
+    relevance: list[int],
+    total_relevant: int,
     top_k_values: tuple[int, ...] = (1, 5, 10),
-) -> tuple[int | None, float, dict[int, bool]]:
-    first_rank: int | None = None
-    for index, label in enumerate(neighbor_labels, start=1):
-        if label == true_label:
-            first_rank = index
-            break
+) -> tuple[dict[int, float], dict[int, float], int | None, float, float]:
+    precision_at_k: dict[int, float] = {}
+    recall_at_k: dict[int, float] = {}
+    cumulative_relevant = 0
+    first_relevant_rank: int | None = None
+    average_precision_at_10 = 0.0
 
-    reciprocal_rank = 0.0 if first_rank is None else 1.0 / float(first_rank)
-    top_hits = {k: (first_rank is not None and first_rank <= k) for k in top_k_values}
-    return first_rank, reciprocal_rank, top_hits
+    for rank, is_relevant in enumerate(relevance, start=1):
+        if is_relevant:
+            cumulative_relevant += 1
+            if first_relevant_rank is None:
+                first_relevant_rank = rank
+            average_precision_at_10 += cumulative_relevant / float(rank)
+        if rank in top_k_values:
+            precision_at_k[rank] = cumulative_relevant / float(rank)
+            recall_at_k[rank] = 0.0 if total_relevant == 0 else cumulative_relevant / float(total_relevant)
+
+    for k in top_k_values:
+        precision_at_k.setdefault(k, 0.0)
+        recall_at_k.setdefault(k, 0.0 if total_relevant == 0 else cumulative_relevant / float(total_relevant))
+
+    if total_relevant > 0:
+        average_precision_at_10 /= float(total_relevant)
+    else:
+        average_precision_at_10 = 0.0
+    reciprocal_rank = 0.0 if first_relevant_rank is None else 1.0 / float(first_relevant_rank)
+    return precision_at_k, recall_at_k, first_relevant_rank, reciprocal_rank, average_precision_at_10
 
 
-def predict_knn_majority(
+def _f1_score(precision: float, recall: float) -> float:
+    denominator = precision + recall
+    if denominator <= 0.0:
+        return 0.0
+    return 2.0 * precision * recall / denominator
+
+
+def evaluate_ranked_candidates(
     samples: list[ProbeSample],
     *,
-    k: int,
+    top_k: int,
     batch_size: int,
-) -> tuple[list[str], list[dict[str, object]]]:
+) -> tuple[list[dict[str, object]], RankingSummary]:
     if len(samples) < 2:
-        return [], []
+        return [], RankingSummary(
+            query_count=len(samples),
+            evaluated_query_count=0,
+            precision_at_1=0.0,
+            precision_at_5=0.0,
+            precision_at_10=0.0,
+            recall_at_1=0.0,
+            recall_at_5=0.0,
+            recall_at_10=0.0,
+            f1_at_1=0.0,
+            f1_at_5=0.0,
+            f1_at_10=0.0,
+            mean_average_precision_at_10=0.0,
+            mean_reciprocal_rank=0.0,
+        )
 
-    effective_k = min(max(1, k), len(samples) - 1)
+    effective_k = min(max(1, top_k), len(samples) - 1)
     vectors = _normalize_rows(np.stack([sample.vector for sample in samples], axis=0).astype(np.float32))
     rows = [sample.row for sample in samples]
-    predicted_labels: list[str] = []
     per_query_rows: list[dict[str, object]] = []
+    precision_at_1_values: list[float] = []
+    precision_at_5_values: list[float] = []
+    precision_at_10_values: list[float] = []
+    recall_at_1_values: list[float] = []
+    recall_at_5_values: list[float] = []
+    recall_at_10_values: list[float] = []
+    f1_at_1_values: list[float] = []
+    f1_at_5_values: list[float] = []
+    f1_at_10_values: list[float] = []
+    average_precision_values: list[float] = []
+    reciprocal_rank_values: list[float] = []
+    evaluated_query_count = 0
 
-    for start in range(0, len(samples), batch_size):
+    batch_iter = range(0, len(samples), batch_size)
+    for start in tqdm(batch_iter, desc="ranking batches", leave=False):
         stop = min(len(samples), start + batch_size)
         similarity_block = vectors[start:stop] @ vectors.T
         for row_offset, query_index in enumerate(range(start, stop)):
             similarities = np.array(similarity_block[row_offset], copy=True)
             similarities[query_index] = -np.inf
-            neighbor_count = min(effective_k, len(samples) - 1)
-            if neighbor_count <= 0:
-                predicted_labels.append("")
-                per_query_rows.append(
-                    {
-                        "sample_id": rows[query_index].sample_id,
-                        "qid": rows[query_index].qid,
-                        "split": "all",
-                        "target_rank": rows[query_index].target_rank,
-                        "true_label": rows[query_index].target_label,
-                        "predicted_label": "",
-                        "modality_pattern": rows[query_index].modality_pattern,
-                        "k": k,
-                    }
-                )
-                continue
-
-            if neighbor_count == len(samples) - 1:
-                neighbor_indices = np.flatnonzero(np.isfinite(similarities))
+            if effective_k == len(samples) - 1:
+                ranked_indices = np.flatnonzero(np.isfinite(similarities))
             else:
-                neighbor_indices = np.argpartition(-similarities, kth=neighbor_count - 1)[:neighbor_count]
-            neighbor_indices = neighbor_indices[np.argsort(-similarities[neighbor_indices], kind="mergesort")]
-            neighbor_labels = [rows[index].target_label for index in neighbor_indices]
-            neighbor_similarities = [float(similarities[index]) for index in neighbor_indices]
-            predicted_label, vote_counts = _majority_vote(neighbor_labels, neighbor_similarities)
-            first_rank, reciprocal_rank, top_hits = _ranking_metrics(neighbor_labels, rows[query_index].target_label)
-            predicted_labels.append(predicted_label)
+                ranked_indices = np.argpartition(-similarities, kth=effective_k - 1)[:effective_k]
+            ranked_indices = ranked_indices[np.argsort(-similarities[ranked_indices], kind="mergesort")]
+            ranked_labels = [rows[index].target_label for index in ranked_indices]
+            relevance = [1 if label == rows[query_index].target_label else 0 for label in ranked_labels[:effective_k]]
+            total_relevant = sum(
+                1 for index in np.flatnonzero(np.isfinite(similarities)) if rows[index].target_label == rows[query_index].target_label
+            )
+            if total_relevant > 0:
+                evaluated_query_count += 1
+            precision_at_k, recall_at_k, first_rank, reciprocal_rank, average_precision_at_10 = _prefix_precision_recall(
+                relevance,
+                total_relevant,
+            )
+            precision_at_1_values.append(precision_at_k[1])
+            precision_at_5_values.append(precision_at_k[5])
+            precision_at_10_values.append(precision_at_k[10])
+            recall_at_1_values.append(recall_at_k[1])
+            recall_at_5_values.append(recall_at_k[5])
+            recall_at_10_values.append(recall_at_k[10])
+            f1_at_1_values.append(_f1_score(precision_at_k[1], recall_at_k[1]))
+            f1_at_5_values.append(_f1_score(precision_at_k[5], recall_at_k[5]))
+            f1_at_10_values.append(_f1_score(precision_at_k[10], recall_at_k[10]))
+            average_precision_values.append(average_precision_at_10)
+            reciprocal_rank_values.append(reciprocal_rank)
             per_query_rows.append(
                 {
                     "sample_id": rows[query_index].sample_id,
                     "qid": rows[query_index].qid,
                     "split": "all",
                     "target_rank": rows[query_index].target_rank,
-                    "true_label": rows[query_index].target_label,
-                    "predicted_label": predicted_label,
+                    "target_label": rows[query_index].target_label,
                     "modality_pattern": rows[query_index].modality_pattern,
-                    "k": k,
-                    "first_correct_rank": "" if first_rank is None else first_rank,
+                    "top_k": top_k,
+                    "relevant_count": total_relevant,
+                    "first_relevant_rank": "" if first_rank is None else first_rank,
                     "reciprocal_rank": f"{reciprocal_rank:.10f}",
-                    "top1_hit": int(top_hits[1]),
-                    "top5_hit": int(top_hits[5]),
-                    "top10_hit": int(top_hits[10]),
-                    "neighbor_labels": "|".join(neighbor_labels),
-                    "vote_counts": json.dumps(vote_counts, ensure_ascii=False, sort_keys=True),
+                    "precision_at_1": f"{precision_at_k[1]:.10f}",
+                    "precision_at_5": f"{precision_at_k[5]:.10f}",
+                    "precision_at_10": f"{precision_at_k[10]:.10f}",
+                    "recall_at_1": f"{recall_at_k[1]:.10f}",
+                    "recall_at_5": f"{recall_at_k[5]:.10f}",
+                    "recall_at_10": f"{recall_at_k[10]:.10f}",
+                    "f1_at_1": f"{_f1_score(precision_at_k[1], recall_at_k[1]):.10f}",
+                    "f1_at_5": f"{_f1_score(precision_at_k[5], recall_at_k[5]):.10f}",
+                    "f1_at_10": f"{_f1_score(precision_at_k[10], recall_at_k[10]):.10f}",
+                    "hit_at_1": int(recall_at_k[1] > 0.0),
+                    "hit_at_5": int(recall_at_k[5] > 0.0),
+                    "hit_at_10": int(recall_at_k[10] > 0.0),
+                    "ranked_labels": "|".join(ranked_labels),
+                    "ranked_relevance": "|".join(str(value) for value in relevance),
                 }
             )
-    return predicted_labels, per_query_rows
+
+    summary = RankingSummary(
+        query_count=len(samples),
+        evaluated_query_count=evaluated_query_count,
+        precision_at_1=float(np.mean(precision_at_1_values)) if precision_at_1_values else 0.0,
+        precision_at_5=float(np.mean(precision_at_5_values)) if precision_at_5_values else 0.0,
+        precision_at_10=float(np.mean(precision_at_10_values)) if precision_at_10_values else 0.0,
+        recall_at_1=float(np.mean(recall_at_1_values)) if recall_at_1_values else 0.0,
+        recall_at_5=float(np.mean(recall_at_5_values)) if recall_at_5_values else 0.0,
+        recall_at_10=float(np.mean(recall_at_10_values)) if recall_at_10_values else 0.0,
+        f1_at_1=float(np.mean(f1_at_1_values)) if f1_at_1_values else 0.0,
+        f1_at_5=float(np.mean(f1_at_5_values)) if f1_at_5_values else 0.0,
+        f1_at_10=float(np.mean(f1_at_10_values)) if f1_at_10_values else 0.0,
+        mean_average_precision_at_10=float(np.mean(average_precision_values)) if average_precision_values else 0.0,
+        mean_reciprocal_rank=float(np.mean(reciprocal_rank_values)) if reciprocal_rank_values else 0.0,
+    )
+    return per_query_rows, summary
 
 
 def run(args: argparse.Namespace) -> None:
@@ -398,7 +477,7 @@ def run(args: argparse.Namespace) -> None:
         output_dir = PROJECT_ROOT / output_dir
 
     target_ranks = _parse_target_ranks(args.target_ranks)
-    modality_patterns = _parse_modalities(args.modalities)
+    modality_patterns = _parse_modalities(args.modalities or ["G,L,GL,A,GA,LA,GLA"])
     graph_filter = _normalize_filter_values(args.graph_runs)
     language_filter = _normalize_filter_values(args.language_runs)
     audio_filter = _normalize_filter_values(args.audio_runs)
@@ -427,24 +506,17 @@ def run(args: argparse.Namespace) -> None:
     metadata_specs: list[dict[str, object]] = []
     written_dirs: set[str] = set()
 
-    for spec in specs:
+    total_runs = len(specs) * len(target_ranks)
+    run_index = 0
+    for spec in tqdm(specs, desc="EXP3 specs"):
         for target_rank in target_ranks:
+            run_index += 1
+            tqdm.write(f"[{run_index}/{total_runs}] modalities={spec.modalities} target_rank={target_rank} runs={','.join(spec.run_labels)}")
             samples = build_probe_samples(spec, labels_by_qid=labels_by_qid, target_rank=target_rank)
             if len(samples) < 2:
                 continue
-            predicted_labels, per_query_rows = predict_knn_majority(samples, k=args.k, batch_size=args.batch_size)
+            per_query_rows, ranking_summary = evaluate_ranked_candidates(samples, top_k=DEFAULT_TOP_K, batch_size=args.batch_size)
             rows = [sample.row for sample in samples]
-            classes = sorted({row.target_label for row in rows})
-            evaluation = evaluate_predictions(
-                split_name="all",
-                rows=rows,
-                predicted_labels=predicted_labels,
-                classes=classes,
-            )
-            reciprocal_ranks = [float(row["reciprocal_rank"]) for row in per_query_rows]
-            top1_hits = [int(row["top1_hit"]) for row in per_query_rows]
-            top5_hits = [int(row["top5_hit"]) for row in per_query_rows]
-            top10_hits = [int(row["top10_hit"]) for row in per_query_rows]
             run_name = "__".join([spec.modalities, target_rank, *(_safe_name(label) for label in spec.run_labels)])
             spec_output_dir = output_dir / target_rank / spec.modalities / _safe_name("__".join(spec.run_labels))
             summary_rows.append(
@@ -453,15 +525,20 @@ def run(args: argparse.Namespace) -> None:
                     "modalities": spec.modalities,
                     "target_rank": target_rank,
                     "run_labels": ",".join(spec.run_labels),
-                    "k": args.k,
-                    "sample_count": len(samples),
-                    "class_count": len(classes),
-                    "accuracy": f"{evaluation.accuracy:.10f}",
-                    "macro_f1": f"{evaluation.macro_f1:.10f}",
-                    "mrr": f"{float(np.mean(reciprocal_ranks)):.10f}" if reciprocal_ranks else "0.0000000000",
-                    "top1_accuracy": f"{float(np.mean(top1_hits)):.10f}" if top1_hits else "0.0000000000",
-                    "top5_accuracy": f"{float(np.mean(top5_hits)):.10f}" if top5_hits else "0.0000000000",
-                    "top10_accuracy": f"{float(np.mean(top10_hits)):.10f}" if top10_hits else "0.0000000000",
+                    "top_k": DEFAULT_TOP_K,
+                    "sample_count": ranking_summary.query_count,
+                    "evaluated_query_count": ranking_summary.evaluated_query_count,
+                    "precision_at_1": f"{ranking_summary.precision_at_1:.10f}",
+                    "precision_at_5": f"{ranking_summary.precision_at_5:.10f}",
+                    "precision_at_10": f"{ranking_summary.precision_at_10:.10f}",
+                    "recall_at_1": f"{ranking_summary.recall_at_1:.10f}",
+                    "recall_at_5": f"{ranking_summary.recall_at_5:.10f}",
+                    "recall_at_10": f"{ranking_summary.recall_at_10:.10f}",
+                    "f1_at_1": f"{ranking_summary.f1_at_1:.10f}",
+                    "f1_at_5": f"{ranking_summary.f1_at_5:.10f}",
+                    "f1_at_10": f"{ranking_summary.f1_at_10:.10f}",
+                    "map_at_10": f"{ranking_summary.mean_average_precision_at_10:.10f}",
+                    "mrr": f"{ranking_summary.mean_reciprocal_rank:.10f}",
                 }
             )
             metadata_specs.append(
@@ -471,8 +548,8 @@ def run(args: argparse.Namespace) -> None:
                     "target_rank": target_rank,
                     "run_labels": list(spec.run_labels),
                     "paths": [str(bundle.path) for bundle in spec.bundles],
-                    "sample_count": len(samples),
-                    "class_count": len(classes),
+                    "sample_count": ranking_summary.query_count,
+                    "evaluated_query_count": ranking_summary.evaluated_query_count,
                 }
             )
             _write_tsv(
@@ -483,15 +560,20 @@ def run(args: argparse.Namespace) -> None:
                         "modalities": spec.modalities,
                         "target_rank": target_rank,
                         "run_labels": ",".join(spec.run_labels),
-                        "k": args.k,
-                        "sample_count": len(samples),
-                        "class_count": len(classes),
-                        "accuracy": f"{evaluation.accuracy:.10f}",
-                        "macro_f1": f"{evaluation.macro_f1:.10f}",
-                        "mrr": f"{float(np.mean(reciprocal_ranks)):.10f}" if reciprocal_ranks else "0.0000000000",
-                        "top1_accuracy": f"{float(np.mean(top1_hits)):.10f}" if top1_hits else "0.0000000000",
-                        "top5_accuracy": f"{float(np.mean(top5_hits)):.10f}" if top5_hits else "0.0000000000",
-                        "top10_accuracy": f"{float(np.mean(top10_hits)):.10f}" if top10_hits else "0.0000000000",
+                        "top_k": DEFAULT_TOP_K,
+                        "sample_count": ranking_summary.query_count,
+                        "evaluated_query_count": ranking_summary.evaluated_query_count,
+                        "precision_at_1": f"{ranking_summary.precision_at_1:.10f}",
+                        "precision_at_5": f"{ranking_summary.precision_at_5:.10f}",
+                        "precision_at_10": f"{ranking_summary.precision_at_10:.10f}",
+                        "recall_at_1": f"{ranking_summary.recall_at_1:.10f}",
+                        "recall_at_5": f"{ranking_summary.recall_at_5:.10f}",
+                        "recall_at_10": f"{ranking_summary.recall_at_10:.10f}",
+                        "f1_at_1": f"{ranking_summary.f1_at_1:.10f}",
+                        "f1_at_5": f"{ranking_summary.f1_at_5:.10f}",
+                        "f1_at_10": f"{ranking_summary.f1_at_10:.10f}",
+                        "map_at_10": f"{ranking_summary.mean_average_precision_at_10:.10f}",
+                        "mrr": f"{ranking_summary.mean_reciprocal_rank:.10f}",
                     }
                 ],
                 [
@@ -499,15 +581,20 @@ def run(args: argparse.Namespace) -> None:
                     "modalities",
                     "target_rank",
                     "run_labels",
-                    "k",
+                    "top_k",
                     "sample_count",
-                    "class_count",
-                    "accuracy",
-                    "macro_f1",
+                    "evaluated_query_count",
+                    "precision_at_1",
+                    "precision_at_5",
+                    "precision_at_10",
+                    "recall_at_1",
+                    "recall_at_5",
+                    "recall_at_10",
+                    "f1_at_1",
+                    "f1_at_5",
+                    "f1_at_10",
+                    "map_at_10",
                     "mrr",
-                    "top1_accuracy",
-                    "top5_accuracy",
-                    "top10_accuracy",
                 ],
             )
             _write_tsv(
@@ -525,28 +612,37 @@ def run(args: argparse.Namespace) -> None:
                     "qid",
                     "split",
                     "target_rank",
-                    "true_label",
-                    "predicted_label",
+                    "target_label",
                     "modality_pattern",
-                    "k",
-                    "first_correct_rank",
+                    "top_k",
+                    "relevant_count",
+                    "first_relevant_rank",
                     "reciprocal_rank",
-                    "top1_hit",
-                    "top5_hit",
-                    "top10_hit",
-                    "neighbor_labels",
-                    "vote_counts",
+                    "precision_at_1",
+                    "precision_at_5",
+                    "precision_at_10",
+                    "recall_at_1",
+                    "recall_at_5",
+                    "recall_at_10",
+                    "f1_at_1",
+                    "f1_at_5",
+                    "f1_at_10",
+                    "hit_at_1",
+                    "hit_at_5",
+                    "hit_at_10",
+                    "ranked_labels",
+                    "ranked_relevance",
                 ],
             )
             _write_json(
                 spec_output_dir / "metadata.json",
                 {
                     "experiment": "EXP3-taxon-probe",
-                    "probe": "leave-one-out k-nearest-neighbor majority vote over frozen embeddings",
-                    "k": args.k,
+                    "probe": "ranked-candidate evaluation over frozen embeddings",
+                    "top_k": DEFAULT_TOP_K,
                     "batch_size": args.batch_size,
                     "selected_runs": str(selected_runs_path),
-                    "taxonomy_graph": str(taxonomy_graph_path),
+                    "taxon_labels": str(taxon_labels_path),
                     "modalities": [spec.modalities],
                     "graph_runs": sorted(graph_filter) if graph_filter else "all selected",
                     "language_runs": sorted(language_filter) if language_filter else "all selected",
@@ -559,7 +655,6 @@ def run(args: argparse.Namespace) -> None:
                         "run_labels": list(spec.run_labels),
                         "paths": [str(bundle.path) for bundle in spec.bundles],
                         "sample_count": len(samples),
-                        "class_count": len(classes),
                     },
                 },
             )
@@ -583,15 +678,20 @@ def run(args: argparse.Namespace) -> None:
             "modalities",
             "target_rank",
             "run_labels",
-            "k",
+            "top_k",
             "sample_count",
-            "class_count",
-            "accuracy",
-            "macro_f1",
+            "evaluated_query_count",
+            "precision_at_1",
+            "precision_at_5",
+            "precision_at_10",
+            "recall_at_1",
+            "recall_at_5",
+            "recall_at_10",
+            "f1_at_1",
+            "f1_at_5",
+            "f1_at_10",
+            "map_at_10",
             "mrr",
-            "top1_accuracy",
-            "top5_accuracy",
-            "top10_accuracy",
         ],
     )
     _write_tsv(
@@ -603,25 +703,34 @@ def run(args: argparse.Namespace) -> None:
             "qid",
             "split",
             "target_rank",
-            "true_label",
-            "predicted_label",
+            "target_label",
             "modality_pattern",
-            "k",
-            "first_correct_rank",
+            "top_k",
+            "relevant_count",
+            "first_relevant_rank",
             "reciprocal_rank",
-            "top1_hit",
-            "top5_hit",
-            "top10_hit",
-            "neighbor_labels",
-            "vote_counts",
+            "precision_at_1",
+            "precision_at_5",
+            "precision_at_10",
+            "recall_at_1",
+            "recall_at_5",
+            "recall_at_10",
+            "f1_at_1",
+            "f1_at_5",
+            "f1_at_10",
+            "hit_at_1",
+            "hit_at_5",
+            "hit_at_10",
+            "ranked_labels",
+            "ranked_relevance",
         ],
     )
     _write_json(
         output_dir / "metadata.json",
         {
             "experiment": "EXP3-taxon-probe",
-            "probe": "leave-one-out k-nearest-neighbor majority vote over frozen embeddings",
-            "k": args.k,
+            "probe": "ranked-candidate evaluation over frozen embeddings",
+            "top_k": DEFAULT_TOP_K,
             "batch_size": args.batch_size,
             "selected_runs": str(selected_runs_path),
             "taxon_labels": str(taxon_labels_path),
@@ -640,7 +749,7 @@ def run(args: argparse.Namespace) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run EXP3 taxon classification with k-nearest majority vote.")
+    parser = argparse.ArgumentParser(description="Run EXP3 taxon ranking evaluation.")
     parser.add_argument("--selected-runs", default=str(DEFAULT_SELECTED_RUNS_PATH))
     parser.add_argument(
         "--taxon-labels",
@@ -651,14 +760,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--modalities",
         action="append",
-        default=["G,L,GL,A,GA,LA,GLA"],
+        default=[],
         help="Comma-separated modality patterns, defaulting to all combinations: G,L,GL,A,GA,LA,GLA.",
     )
     parser.add_argument("--graph-runs", action="append", default=[], help="Limit graph runs, e.g. node2vec,gcn.")
     parser.add_argument("--language-runs", action="append", default=[], help="Limit language runs, e.g. en.")
     parser.add_argument("--audio-runs", action="append", default=[], help="Limit audio runs, e.g. wav2vec2_base.")
     parser.add_argument("--target-ranks", default=DEFAULT_TARGET_RANKS, help="Comma-separated target ranks, e.g. family,order.")
-    parser.add_argument("--k", type=int, default=5, help="Number of nearest neighbors used for majority vote.")
     parser.add_argument("--batch-size", type=int, default=256, help="Batch size for similarity computation.")
     return parser
 

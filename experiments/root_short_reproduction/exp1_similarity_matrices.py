@@ -10,7 +10,7 @@ from typing import Iterable
 import numpy as np
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EMBEDDING_ROOT = PROJECT_ROOT / "data" / "external" / "embeddings"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp1_img"
 DEFAULT_SELECTED_RUNS_PATH = DEFAULT_EMBEDDING_ROOT / "selected_runs.json"

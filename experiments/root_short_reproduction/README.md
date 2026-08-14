@@ -33,19 +33,28 @@ BirdNET のように1音声が複数windowに分かれる場合は、同一音�
 
 論文では各モダリティの類似度上位 95 percentile を edge とし、少なくとも1つのモダリティで現れた edge を統合しています。
 
-## Experiment 3: Cached taxon-label prediction with frozen embeddings
+## Experiment 3: Cached taxon-label ranking with frozen embeddings
 
-目的は、`G`, `L`, `A` およびその組合せの埋め込みが、`order` / `family` のような上位分類ラベルをどこまで予測できるかを見ることです。
+目的は、`G`, `L`, `A` およびその組合せの埋め込みが、`order` / `family` のような上位分類ラベルで候補順位をどこまで保てるかを見ることです。
 
-この実験では学習済み分類器は使わず、各サンプルに対して `k` 近傍の多数決でラベルを決めます。
-埋め込みは固定で、`k` だけを更新できるようにしています。
+この実験では学習済み分類器は使わず、各サンプルの候補を similarity 順に並べて、同じラベルが上位何件に現れるかを評価します。
+埋め込みは固定で、`top_k` は評価する順位の上限として使います。
 実行前に [data/processed/taxonomy/qid_taxon_labels.tsv](../../data/processed/taxonomy/qid_taxon_labels.tsv) を作成してください。
 作成には `make build-taxon-labels` を先に実行します。
 
 評価指標は以下です。
 
-- `accuracy`
-- `macro_f1`
+- `precision@1`
+- `precision@5`
+- `precision@10`
+- `recall@1`
+- `recall@5`
+- `recall@10`
+- `F1@1`
+- `F1@5`
+- `F1@10`
+- `MAP@10`
+- `MRR`
 
 ### EXP3-sub1: Audio pretraining / fine-tuning comparison
 
@@ -82,10 +91,11 @@ experiments/root_short_reproduction/exp3_sub1_audio/
 - `metadata.json`
 
 
-### EXP3-main: k-nearest majority vote probe
+### EXP3-main: ranked-candidate evaluation probe
 
-`G`, `L`, `GL`, `A`, `GA`, `LA`, `GLA` などのモダリティ組合せを指定して、`order` / `family` を分類します。
+`G`, `L`, `GL`, `A`, `GA`, `LA`, `GLA` などのモダリティ組合せを指定して、`order` / `family` の順位を評価します。
 既定では、全組み合わせを対象にします。
+ここでの `top_k` は 1 回の実行で評価する順位の上限です。現在は固定で `top_k=10` としており、候補ラベル列に対する `precision@1/5/10`、`recall@1/5/10`、`F1@1/5/10`、`MAP@10`、`MRR` を出力します。
 
 通常実行コマンド:
 
@@ -94,18 +104,10 @@ make run-exp3-search
 make run-exp3-taxon-probe
 ```
 
-`k` を変える例:
-
-```bash
-make run-exp3-search EXP3_K=3
-make run-exp3-taxon-probe EXP3_K=3
-make run-exp3-search EXP3_K=7 EXP3_TARGET_RANKS=family
-```
-
 直接 Python を叩く場合:
 
 ```bash
-python3 experiments/root_short_reproduction/exp3_taxon_probe.py --k 5 --target-ranks family,order
+python3 experiments/root_short_reproduction/exp3_taxon_probe.py --target-ranks family,order
 ```
 
 モダリティを指定する例:
@@ -142,6 +144,8 @@ experiments/root_short_reproduction/exp3_taxon_probe/order/GL/
 - `predictions.tsv`
 - `metadata.json`
 
+`predictions.tsv` では、正解ラベルに対する順位ごとの `precision` / `recall` / `F1` を出力します。
+
 ## Embedding run selection
 
 実験コードは既定で [data/external/embeddings/selected_runs.json](../../data/external/embeddings/selected_runs.json) を読みます。
@@ -153,6 +157,55 @@ experiments/root_short_reproduction/exp3_taxon_probe/order/GL/
 python3 experiments/root_short_reproduction/exp1_similarity_matrices.py --no-use-selected-runs
 python3 experiments/root_short_reproduction/exp3_sub1_audio_pretraining.py --no-use-selected-runs
 ```
+
+## QID Coverage
+
+`G`, `L`, `A` の各 selected run を読み、すべてのモダリティと run をまたいで共通する `QID` だけを数えます。
+一部のモダリティでも欠ける `QID` は数えません。
+
+通常実行コマンド:
+
+```bash
+make report-qid-coverage
+```
+
+主な出力先:
+
+- `experiments/root_short_reproduction/exp1_qid_coverage/summary.json`
+- `experiments/root_short_reproduction/exp1_qid_coverage/common_qids.tsv`
+- `experiments/root_short_reproduction/exp1_qid_coverage/run_qid_counts.tsv`
+
+`data/interim/xeno-canto/api_recordings/<QID>/page001.json` の `numRecordings` を直接集計したい場合は、次を使います。
+
+```bash
+make collect-xeno-canto-num-recordings
+```
+
+主な出力先:
+
+- `experiments/root_short_reproduction/exp1_xeno_canto_num_recordings/qid_num_recordings.tsv`
+- `experiments/root_short_reproduction/exp1_xeno_canto_num_recordings/summary.json`
+- `experiments/root_short_reproduction/exp1_xeno_canto_num_recordings/missing_page001_qids.tsv`
+- `experiments/root_short_reproduction/exp1_xeno_canto_num_recordings/top_100_qids.tsv`
+- `experiments/root_short_reproduction/exp1_xeno_canto_num_recordings/num_recordings_distribution.png`
+- `experiments/root_short_reproduction/exp1_xeno_canto_num_recordings/num_recordings_distribution_log.png`
+
+これは `recording_map.json` の行数ではなく、API が返す `numRecordings` を使います。
+
+固定した `QID` 順でモダリティ別の類似度行列を出したい場合は、`top_100_qids.tsv` を順序ファイルとして使います。
+
+```bash
+make run-exp1-simmatrix-ordered
+```
+
+主な出力先:
+
+- `experiments/root_short_reproduction/exp1_img_ordered/<run_name>/similarity.npy`
+- `experiments/root_short_reproduction/exp1_img_ordered/<run_name>/qids.tsv`
+- `experiments/root_short_reproduction/exp1_img_ordered/<run_name>/heatmap.png`
+- `experiments/root_short_reproduction/exp1_img_ordered/<run_name>/distribution.png`
+- `experiments/root_short_reproduction/exp1_img_ordered/summary.tsv`
+- `experiments/root_short_reproduction/exp1_img_ordered/metadata.json`
 
 ## 現在のコード
 
@@ -198,6 +251,7 @@ experiments/root_short_reproduction/exp1_img/
 
 一覧を見るなら、まず `data/processed/taxonomy/qid_taxon_labels.tsv` を見てください。
 `qid` ごとの `order_qid` / `order_label` / `family_qid` / `family_label` が入っています。
+EXP3 の `predictions.tsv` では、この `*_label` をそのまま正解ラベルとして使います。
 
 通常実行コマンド:
 
