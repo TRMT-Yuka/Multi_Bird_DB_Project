@@ -14,6 +14,7 @@ from multi_bird_db.embeddings import (
     build_transe_embeddings,
     save_embedding_store,
 )
+from multi_bird_db.embeddings import _build_structural_features
 
 
 class GraphEmbeddingTraceTests(unittest.TestCase):
@@ -92,6 +93,19 @@ class GraphEmbeddingTraceTests(unittest.TestCase):
             self.assertTrue(all("average_loss" in item for item in trace))
             self.assertTrue(all(item["average_loss"] >= 0 for item in trace))
             self.assertTrue((output_dir / "loss_curve.png").exists())
+
+    def test_depth_initial_features_use_taxonomy_root(self) -> None:
+        qids = ["Q1", "Q2", "Q3"]
+        features = _build_structural_features(
+            self.graph,
+            qids=qids,
+            feature_mode="depth",
+            seed=42,
+            dim=8,
+            root_qid="Q1",
+        )
+        self.assertEqual(features.shape, (3, 1))
+        self.assertEqual(features[:, 0].tolist(), [0.0, 0.5, 1.0])
 
     def test_grace_records_training_trace(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

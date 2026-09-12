@@ -927,6 +927,7 @@ def _build_structural_features(
     feature_mode: str,
     seed: int,
     dim: int,
+    root_qid: str | None = None,
 ) -> np.ndarray:
     """Build structural node features without label leakage. / ラベル漏洩のない構造特徴を作る。"""
 
@@ -956,6 +957,31 @@ def _build_structural_features(
                 ]
             )
         return np.asarray(feature_rows, dtype=np.float32)
+
+    if mode == "depth":
+        # Taxonomy edges point from parent to child, so depth is measured
+        # from the configured taxonomy root along the edge direction.
+        configured_root = root_qid or graph.graph.get("root_qid")
+        if configured_root is None or str(configured_root) not in graph:
+            roots = sorted(str(node) for node in graph if graph.in_degree(node) == 0)
+            configured_root = roots[0] if roots else (qids[0] if qids else None)
+        configured_root = str(configured_root) if configured_root is not None else None
+        distances = (
+            nx.single_source_shortest_path_length(graph, configured_root)
+            if configured_root is not None
+            else {}
+        )
+        reachable_depths = [int(distances[node]) for node in qids if node in distances]
+        max_depth = max(reachable_depths, default=1)
+        max_depth = max(max_depth, 1)
+        # Keep disconnected nodes distinct from the root while remaining
+        # bounded; this also avoids NaN/inf when a graph has multiple trees.
+        disconnected_depth = max_depth + 1
+        normalization_depth = disconnected_depth if len(reachable_depths) < len(qids) else max_depth
+        return np.asarray(
+            [[float(distances.get(qid, disconnected_depth)) / float(normalization_depth)] for qid in qids],
+            dtype=np.float32,
+        )
 
     if mode == "one_hot":
         return np.eye(node_count, dtype=np.float32)
@@ -992,16 +1018,17 @@ def _train_gcn_embeddings(
     seed: int,
     undirected: bool,
     feature_mode: str,
+    root_qid: str | None,
 ) -> tuple[np.ndarray, list[dict[str, float]]]:
     torch_mod, nn_mod, F_mod = _require_torch()
     rng = np.random.default_rng(seed)
     node_to_index, _, adjacency, edge_set, _ = _build_torch_graph_data(graph, qids=qids, undirected=undirected)
 
     if graph.number_of_edges() == 0:
-        features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim)
+        features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
         return features.astype(np.float32), []
 
-    initial_features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim)
+    initial_features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
     input_dim = int(initial_features.shape[1])
     edge_pairs = [
         (node_to_index[str(source)], node_to_index[str(target)])
@@ -1139,6 +1166,7 @@ def build_gcn_embeddings(
         seed=seed,
         undirected=undirected,
         feature_mode=feature_mode,
+        root_qid=root_qid,
     )
     metadata = {
         "algorithm": "gcn",
@@ -1181,6 +1209,7 @@ def _train_graphsage_embeddings(
     seed: int,
     undirected: bool,
     device_obj: Any,
+    root_qid: str | None,
 ) -> tuple[np.ndarray, list[dict[str, float]]]:
     torch_mod, nn_mod, F_mod = _require_torch()
     rng = np.random.default_rng(seed)
@@ -1190,7 +1219,7 @@ def _train_graphsage_embeddings(
         undirected=undirected,
         device=device_obj,
     )
-    features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim)
+    features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
     feature_tensor = torch_mod.tensor(features, dtype=torch_mod.float32, device=device_obj)
     input_dim = int(features.shape[1])
     edge_pairs = [
@@ -1366,6 +1395,7 @@ def build_graphsage_embeddings(
         seed=seed,
         undirected=undirected,
         device_obj=device_obj,
+        root_qid=root_qid,
     )
     metadata = {
         "algorithm": "graphsage",
@@ -1429,7 +1459,7 @@ def build_grace_embeddings(
         for source, target in graph.edges()
         if str(source) in node_to_index and str(target) in node_to_index
     ]
-    features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim)
+    features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
     projector_dim = int(proj_dim if proj_dim is not None else dim)
     device_obj, resolved_device = _resolve_torch_device(device, context="grace")
 
@@ -1878,7 +1908,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dim", type=int, default=128)
     parser.add_argument("--proj-dim", type=int, default=128)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--initial-features", choices=["degree", "one_hot", "constant", "random"], default="degree")
+    parser.add_argument(
+        "--initial-features",
+        choices=["degree", "depth", "one_hot", "constant", "random"],
+        default="degree",
+        help="Initial node features for GCN/GraphSAGE/GRACE; depth uses root_qid to measure taxonomy depth.",
+    )
 
     parser.add_argument("--walk-length", type=int, default=40)
     parser.add_argument("--num-walks", type=int, default=10)

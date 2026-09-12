@@ -169,6 +169,19 @@ make build-embeddings
   - 既定値: `dim=128`, `epochs=200`, `learning_rate=0.001`, `margin=1.0`, `negative_samples=10`, `p_norm=1`, `weight_decay=1e-5`, `seed=42`, `root_qid=None`
   - `p_norm=1` なので L1 距離版として扱う
 
+`gcn`、`graphsage`、`grace` の初期ノード特徴は `--initial-features` で変更できます。`degree` が従来の次数特徴、`depth` は `--root-qid` または graph の `root_qid` から parent→child 方向に測った深さを最大深さで正規化した 1 次元特徴です。
+
+```bash
+PYTHONPATH=src python -m multi_bird_db.cli build-embeddings \
+  --algorithm gcn --initial-features depth --root-qid Q5113
+```
+
+Make 経由なら次のように指定できます（GCN / GRACE / GraphSAGE 共通）。
+
+```bash
+make build-gcn-embeddings INITIAL_FEATURES=depth
+```
+
 #### 公式リンク
 
 - `node2vec`: [論文](https://arxiv.org/abs/1607.00653), [実装](https://github.com/eliorc/node2vec)

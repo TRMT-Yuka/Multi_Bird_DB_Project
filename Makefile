@@ -2,6 +2,7 @@ PYTHON ?= python3
 PYTHONPATH := src
 EXTRACT_DUMP_JSON_ARGS ?=
 EMBEDDING_ALGORITHM ?= node2vec
+INITIAL_FEATURES ?= degree
 EXP3_TARGET_RANKS ?= family,order
 EXP3_ARGS ?=
 TAXON_RANKS ?= order,family
@@ -90,13 +91,13 @@ build-node2vec-embeddings:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm node2vec
 
 build-gcn-embeddings:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm gcn --layers 1 --epochs 300 --learning-rate 0.01 --negative-samples 20 --weight-decay 0
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm gcn --layers 1 --epochs 300 --learning-rate 0.01 --negative-samples 20 --weight-decay 0 --initial-features $(INITIAL_FEATURES)
 
 build-grace-embeddings:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm grace
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm grace --initial-features $(INITIAL_FEATURES)
 
 build-graphsage-embeddings:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm graphsage --device cuda --dim 128 --epochs 200 --negative-samples 1 --graphsage-num-neighbors-1 8 --graphsage-num-neighbors-2 4
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm graphsage --device cuda --dim 128 --epochs 200 --negative-samples 1 --graphsage-num-neighbors-1 8 --graphsage-num-neighbors-2 4 --initial-features $(INITIAL_FEATURES)
 
 build-transe-embeddings:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm transe
