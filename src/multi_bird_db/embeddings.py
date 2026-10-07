@@ -595,6 +595,7 @@ def _train_skipgram_negative_sampling_numpy(
     negative_samples: int,
     epochs: int,
     learning_rate: float,
+    weight_decay: float,
     seed: int,
     graph: nx.DiGraph,
 ) -> tuple[np.ndarray, list[dict[str, float]]]:
@@ -647,6 +648,12 @@ def _train_skipgram_negative_sampling_numpy(
                         grad_neg = learning_rate * (0.0 - _sigmoid(score_neg))
                         input_vectors[center_index] += grad_neg * negative_vector
                         output_vectors[negative_index] += grad_neg * center_vector
+                    if weight_decay > 0.0:
+                        decay = max(0.0, 1.0 - learning_rate * weight_decay)
+                        input_vectors[center_index] *= decay
+                        output_vectors[context_index] *= decay
+                        for negative_index in negatives:
+                            output_vectors[negative_index] *= decay
             now = time.monotonic()
             if walk_index % walk_progress_interval == 0 or now - last_progress_time >= 2.0:
                 _render_progress_line(
@@ -701,6 +708,7 @@ def _train_skipgram_negative_sampling_torch(
     negative_samples: int,
     epochs: int,
     learning_rate: float,
+    weight_decay: float,
     seed: int,
     graph: nx.DiGraph,
     device_obj: Any,
@@ -723,6 +731,7 @@ def _train_skipgram_negative_sampling_torch(
     optimizer = torch_mod.optim.Adam(
         list(input_embeddings.parameters()) + list(output_embeddings.parameters()),
         lr=learning_rate,
+        weight_decay=weight_decay,
     )
     batch_size = 1024
     trace: list[dict[str, float]] = []
@@ -818,6 +827,7 @@ def _train_skipgram_negative_sampling(
     negative_samples: int,
     epochs: int,
     learning_rate: float,
+    weight_decay: float,
     seed: int,
     graph: nx.DiGraph,
     device: str,
@@ -834,6 +844,7 @@ def _train_skipgram_negative_sampling(
             negative_samples=negative_samples,
             epochs=epochs,
             learning_rate=learning_rate,
+            weight_decay=weight_decay,
             seed=seed,
             graph=graph,
         )
@@ -848,6 +859,7 @@ def _train_skipgram_negative_sampling(
         negative_samples=negative_samples,
         epochs=epochs,
         learning_rate=learning_rate,
+        weight_decay=weight_decay,
         seed=seed,
         graph=graph,
         device_obj=device_obj,
@@ -857,13 +869,14 @@ def _train_skipgram_negative_sampling(
 
 def build_node2vec_embeddings(
     graph: nx.DiGraph,
-    dim: int = 128,
+    output_dim: int = 128,
     walk_length: int = 40,
     num_walks: int = 10,
     window_size: int = 10,
     negative_samples: int = 5,
     epochs: int = 200,
     learning_rate: float = 0.001,
+    weight_decay: float = 1e-5,
     p: float = 1.0,
     q: float = 1.0,
     seed: int = 42,
@@ -886,11 +899,12 @@ def build_node2vec_embeddings(
     embeddings, trace, resolved_device = _train_skipgram_negative_sampling(
         walks=walks,
         qids=qids,
-        dim=dim,
+        dim=output_dim,
         window_size=window_size,
         negative_samples=negative_samples,
         epochs=epochs,
         learning_rate=learning_rate,
+        weight_decay=weight_decay,
         seed=seed,
         graph=graph,
         device=device,
@@ -902,13 +916,14 @@ def build_node2vec_embeddings(
         "graph_type": graph.graph.get("graph_type"),
         "root_qid": graph.graph.get("root_qid"),
         "parameters": {
-            "dim": dim,
+            "output_dim": output_dim,
             "walk_length": walk_length,
             "num_walks": num_walks,
             "window_size": window_size,
             "negative_samples": negative_samples,
             "epochs": epochs,
             "learning_rate": learning_rate,
+            "weight_decay": weight_decay,
             "p": p,
             "q": q,
             "seed": seed,
@@ -932,10 +947,9 @@ def _build_structural_features(
     """Build structural node features without label leakage. / ラベル漏洩のない構造特徴を作る。"""
 
     mode = feature_mode.strip().lower()
-    rng = np.random.default_rng(seed)
-    node_count = len(qids)
-
-    if node_count == 0:
+    if mode == "embedding":
+        raise ValueError("feature_mode='embedding' is handled by the trainable nn.Embedding path, not as a dense feature matrix")
+    if not qids:
         return np.zeros((0, 1), dtype=np.float32)
 
     if mode == "degree":
@@ -983,17 +997,6 @@ def _build_structural_features(
             dtype=np.float32,
         )
 
-    if mode == "one_hot":
-        return np.eye(node_count, dtype=np.float32)
-
-    if mode == "constant":
-        return np.ones((node_count, 1), dtype=np.float32)
-
-    if mode == "random":
-        random_dim = max(int(dim), 1)
-        random_features = rng.normal(0.0, 1.0 / math.sqrt(max(random_dim, 1)), size=(node_count, random_dim))
-        return _normalize_rows(random_features.astype(np.float32))
-
     raise ValueError(f"Unsupported feature mode: {feature_mode}")
 
 
@@ -1009,6 +1012,7 @@ def _train_gcn_embeddings(
     graph: nx.DiGraph,
     qids: list[str],
     dim: int,
+    output_dim: int,
     layers: int,
     residual: float,
     epochs: int,
@@ -1024,28 +1028,47 @@ def _train_gcn_embeddings(
     rng = np.random.default_rng(seed)
     node_to_index, _, adjacency, edge_set, _ = _build_torch_graph_data(graph, qids=qids, undirected=undirected)
 
+    use_embedding = feature_mode.strip().lower() == "embedding"
     if graph.number_of_edges() == 0:
+        if use_embedding:
+            return _initial_entity_embeddings(qids=qids, dim=output_dim, seed=seed), []
         features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
         return features.astype(np.float32), []
 
-    initial_features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
-    input_dim = int(initial_features.shape[1])
+    initial_features = None if use_embedding else _build_structural_features(
+        graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid
+    )
+    input_dim = int(initial_features.shape[1]) if initial_features is not None else dim
     edge_pairs = [
         (node_to_index[str(source)], node_to_index[str(target)])
         for source, target in graph.edges()
         if str(source) in node_to_index and str(target) in node_to_index
     ]
     if not edge_pairs:
+        if use_embedding:
+            return _initial_entity_embeddings(qids=qids, dim=output_dim, seed=seed), []
         return initial_features.astype(np.float32), []
 
     class GCNEncoder(nn_mod.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.input = nn_mod.Linear(input_dim, dim)
+            self.input_embedding = (
+                nn_mod.Embedding.from_pretrained(
+                    torch_mod.tensor(_initial_entity_embeddings(qids=qids, dim=dim, seed=seed), device=adjacency.device),
+                    freeze=False,
+                )
+                if use_embedding
+                else None
+            )
+            self.input = None if use_embedding else nn_mod.Linear(input_dim, dim)
             self.layers = nn_mod.ModuleList([_GCNConv(dim, dim) for _ in range(max(layers - 1, 0))])
+            self.output = nn_mod.Linear(dim, output_dim)
 
         def forward(self) -> Any:
-            h = self.input(torch_mod.tensor(initial_features, dtype=torch_mod.float32, device=adjacency.device))
+            if use_embedding:
+                h = self.input_embedding(torch_mod.arange(len(qids), dtype=torch_mod.long, device=adjacency.device))
+            else:
+                h = self.input(torch_mod.tensor(initial_features, dtype=torch_mod.float32, device=adjacency.device))
             h = F_mod.relu(h)
             h = F_mod.normalize(h, p=2, dim=1)
             for layer in self.layers:
@@ -1053,7 +1076,7 @@ def _train_gcn_embeddings(
                 h = residual * h + (1.0 - residual) * aggregated
                 h = F_mod.relu(h)
                 h = F_mod.normalize(h, p=2, dim=1)
-            return h
+            return F_mod.normalize(self.output(h), p=2, dim=1)
 
     encoder = GCNEncoder().to(adjacency.device)
     optimizer = torch_mod.optim.Adam(encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -1061,7 +1084,7 @@ def _train_gcn_embeddings(
     pos_tails = torch_mod.tensor([tail for _, tail in edge_pairs], dtype=torch_mod.long, device=adjacency.device)
 
     trace: list[dict[str, float]] = []
-    final_embeddings = torch_mod.tensor(initial_features, dtype=torch_mod.float32, device=adjacency.device)
+    final_embeddings = torch_mod.zeros((len(qids), output_dim), dtype=torch_mod.float32, device=adjacency.device)
     for epoch in range(epochs):
         encoder.train()
         optimizer.zero_grad()
@@ -1138,14 +1161,15 @@ def _train_gcn_embeddings(
 
 def build_gcn_embeddings(
     graph: nx.DiGraph,
-    dim: int = 128,
-    layers: int = 1,
+    hidden_dim: int = 32,
+    output_dim: int = 128,
+    layers: int = 2,
     residual: float = 0.0,
-    epochs: int = 300,
+    epochs: int = 200,
     learning_rate: float = 0.01,
     negative_samples: int = 20,
-    feature_mode: str = "degree",
-    weight_decay: float = 0.0,
+    feature_mode: str = "embedding",
+    weight_decay: float = 1e-5,
     seed: int = 42,
     root_qid: str | None = None,
     undirected: bool = False,
@@ -1156,7 +1180,8 @@ def build_gcn_embeddings(
     embeddings, trace = _train_gcn_embeddings(
         graph=graph,
         qids=qids,
-        dim=dim,
+        dim=hidden_dim,
+        output_dim=output_dim,
         layers=layers,
         residual=residual,
         epochs=epochs,
@@ -1177,7 +1202,8 @@ def build_gcn_embeddings(
         "relation": "parent_taxon",
         "objective": "link_prediction",
         "parameters": {
-            "dim": dim,
+            "hidden_dim": hidden_dim,
+            "output_dim": output_dim,
             "layers": layers,
             "residual": residual,
             "epochs": epochs,
@@ -1198,10 +1224,12 @@ def _train_graphsage_embeddings(
     graph: nx.DiGraph,
     qids: list[str],
     dim: int,
+    output_dim: int,
     layers: int,
     residual: float,
     epochs: int,
     learning_rate: float,
+    weight_decay: float,
     negative_samples: int,
     num_neighbors_1: int,
     num_neighbors_2: int,
@@ -1219,9 +1247,12 @@ def _train_graphsage_embeddings(
         undirected=undirected,
         device=device_obj,
     )
-    features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
-    feature_tensor = torch_mod.tensor(features, dtype=torch_mod.float32, device=device_obj)
-    input_dim = int(features.shape[1])
+    use_embedding = feature_mode.strip().lower() == "embedding"
+    features = None if use_embedding else _build_structural_features(
+        graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid
+    )
+    feature_tensor = None if use_embedding else torch_mod.tensor(features, dtype=torch_mod.float32, device=device_obj)
+    input_dim = int(features.shape[1]) if features is not None else dim
     edge_pairs = [
         (node_to_index[str(source)], node_to_index[str(target)])
         for source, target in graph.edges()
@@ -1229,6 +1260,8 @@ def _train_graphsage_embeddings(
     ]
 
     if not edge_pairs:
+        if use_embedding:
+            return _initial_entity_embeddings(qids=qids, dim=output_dim, seed=seed), []
         return features.astype(np.float32), []
 
     num_neighbor_layers = [max(int(num_neighbors_1), 1), max(int(num_neighbors_2), 1)]
@@ -1236,11 +1269,23 @@ def _train_graphsage_embeddings(
     class GraphSAGEEncoder(nn_mod.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.input = nn_mod.Linear(input_dim, dim)
+            self.input_embedding = (
+                nn_mod.Embedding.from_pretrained(
+                    torch_mod.tensor(_initial_entity_embeddings(qids=qids, dim=dim, seed=seed), device=device_obj),
+                    freeze=False,
+                )
+                if use_embedding
+                else None
+            )
+            self.input = None if use_embedding else nn_mod.Linear(input_dim, dim)
             self.layers = nn_mod.ModuleList([_GraphSAGELayer(dim) for _ in range(max(layers, 1))])
+            self.output = nn_mod.Linear(dim, output_dim)
 
         def forward(self, sampled_neighbor_layers: list[tuple[Any, Any]]) -> Any:
-            h = self.input(feature_tensor)
+            if use_embedding:
+                h = self.input_embedding(torch_mod.arange(len(qids), dtype=torch_mod.long, device=device_obj))
+            else:
+                h = self.input(feature_tensor)
             h = F_mod.relu(h)
             h = F_mod.normalize(h, p=2, dim=1)
             for layer_index, layer in enumerate(self.layers):
@@ -1250,13 +1295,13 @@ def _train_graphsage_embeddings(
                 h = residual * h + (1.0 - residual) * aggregated
                 h = F_mod.relu(h)
                 h = F_mod.normalize(h, p=2, dim=1)
-            return h
+            return F_mod.normalize(self.output(h), p=2, dim=1)
 
     encoder = GraphSAGEEncoder().to(adjacency.device)
-    optimizer = torch_mod.optim.Adam(encoder.parameters(), lr=learning_rate)
+    optimizer = torch_mod.optim.Adam(encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     noise_probs = _node_weights(graph, qids)
     trace: list[dict[str, float]] = []
-    final_embeddings = feature_tensor.clone()
+    final_embeddings = torch_mod.zeros((len(qids), output_dim), dtype=torch_mod.float32, device=device_obj)
 
     for epoch in range(epochs):
         encoder.train()
@@ -1362,15 +1407,17 @@ def _train_graphsage_embeddings(
 
 def build_graphsage_embeddings(
     graph: nx.DiGraph,
-    dim: int = 128,
+    hidden_dim: int = 32,
+    output_dim: int = 128,
     layers: int = 2,
     residual: float = 0.0,
     epochs: int = 200,
     learning_rate: float = 0.001,
+    weight_decay: float = 1e-5,
     negative_samples: int = 5,
     num_neighbors_1: int = 25,
     num_neighbors_2: int = 10,
-    feature_mode: str = "degree",
+    feature_mode: str = "embedding",
     seed: int = 42,
     root_qid: str | None = None,
     undirected: bool = False,
@@ -1383,11 +1430,13 @@ def build_graphsage_embeddings(
     embeddings, trace = _train_graphsage_embeddings(
         graph=graph,
         qids=qids,
-        dim=dim,
+        dim=hidden_dim,
+        output_dim=output_dim,
         layers=layers,
         residual=residual,
         epochs=epochs,
         learning_rate=learning_rate,
+        weight_decay=weight_decay,
         negative_samples=negative_samples,
         num_neighbors_1=num_neighbors_1,
         num_neighbors_2=num_neighbors_2,
@@ -1406,11 +1455,13 @@ def build_graphsage_embeddings(
         "relation": "parent_taxon",
         "objective": "link_prediction",
         "parameters": {
-            "dim": dim,
+            "hidden_dim": hidden_dim,
+            "output_dim": output_dim,
             "layers": layers,
             "residual": residual,
             "epochs": epochs,
             "learning_rate": learning_rate,
+            "weight_decay": weight_decay,
             "negative_samples": negative_samples,
             "num_neighbors": [num_neighbors_1, num_neighbors_2],
             "feature_mode": feature_mode,
@@ -1427,7 +1478,8 @@ def build_graphsage_embeddings(
 
 def build_grace_embeddings(
     graph: nx.DiGraph,
-    dim: int = 128,
+    hidden_dim: int = 32,
+    output_dim: int = 128,
     proj_dim: int | None = 128,
     layers: int = 2,
     residual: float = 0.0,
@@ -1441,7 +1493,7 @@ def build_grace_embeddings(
     drop_feature_rate_2: float = 0.0,
     batch_size: int = 256,
     encoder_type: str = "gcn",
-    feature_mode: str = "degree",
+    feature_mode: str = "embedding",
     weight_decay: float = 1e-5,
     seed: int = 42,
     root_qid: str | None = None,
@@ -1459,12 +1511,15 @@ def build_grace_embeddings(
         for source, target in graph.edges()
         if str(source) in node_to_index and str(target) in node_to_index
     ]
-    features = _build_structural_features(graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=dim, root_qid=root_qid)
-    projector_dim = int(proj_dim if proj_dim is not None else dim)
+    use_embedding = feature_mode.strip().lower() == "embedding"
+    features = None if use_embedding else _build_structural_features(
+        graph, qids=qids, feature_mode=feature_mode, seed=seed, dim=hidden_dim, root_qid=root_qid
+    )
+    projector_dim = int(proj_dim if proj_dim is not None else output_dim)
     device_obj, resolved_device = _resolve_torch_device(device, context="grace")
 
     if not qids:
-        empty = np.zeros((0, dim), dtype=np.float32)
+        empty = np.zeros((0, output_dim), dtype=np.float32)
         return EmbeddingStore(
             qids=[],
             embeddings=empty,
@@ -1476,7 +1531,8 @@ def build_grace_embeddings(
                 "root_qid": graph.graph.get("root_qid"),
                 "objective": "contrastive_learning",
                 "parameters": {
-                    "dim": dim,
+                    "hidden_dim": hidden_dim,
+                    "output_dim": output_dim,
                     "proj_dim": projector_dim,
                     "layers": layers,
                     "residual": residual,
@@ -1501,27 +1557,40 @@ def build_grace_embeddings(
             },
         )
 
-    base_features = torch_mod.tensor(features, dtype=torch_mod.float32, device=device_obj)
+    base_features = (
+        torch_mod.arange(len(qids), dtype=torch_mod.long, device=device_obj)
+        if use_embedding
+        else torch_mod.tensor(features, dtype=torch_mod.float32, device=device_obj)
+    )
     base_adjacency = _sparse_adjacency_from_edges(len(qids), edge_pairs, device=device_obj)
 
     class GraceEncoder(nn_mod.Module):
         def __init__(self) -> None:
             super().__init__()
-            self.hidden_dim = dim
-            self.input = nn_mod.Linear(int(features.shape[1]), dim)
+            self.hidden_dim = hidden_dim
+            self.input_embedding = (
+                nn_mod.Embedding.from_pretrained(
+                    torch_mod.tensor(_initial_entity_embeddings(qids=qids, dim=hidden_dim, seed=seed), device=device_obj),
+                    freeze=False,
+                )
+                if use_embedding
+                else None
+            )
+            self.input = None if use_embedding else nn_mod.Linear(int(features.shape[1]), hidden_dim)
             self.encoder_type = encoder_type.strip().lower()
             if self.encoder_type == "graphsage":
-                self.layers = nn_mod.ModuleList([_GraphSAGELayer(dim) for _ in range(max(layers - 1, 0))])
+                self.layers = nn_mod.ModuleList([_GraphSAGELayer(hidden_dim) for _ in range(max(layers - 1, 0))])
             else:
-                self.layers = nn_mod.ModuleList([_GCNConv(dim, dim) for _ in range(max(layers - 1, 0))])
+                self.layers = nn_mod.ModuleList([_GCNConv(hidden_dim, hidden_dim) for _ in range(max(layers - 1, 0))])
+            self.output = nn_mod.Linear(hidden_dim, output_dim)
             self.projector = nn_mod.Sequential(
-                nn_mod.Linear(dim, projector_dim),
+                nn_mod.Linear(output_dim, projector_dim),
                 nn_mod.ReLU(),
                 nn_mod.Linear(projector_dim, projector_dim),
             )
 
         def encode(self, x: Any, adjacency: Any) -> Any:
-            h = F_mod.relu(self.input(x))
+            h = F_mod.relu(self.input_embedding(x) if use_embedding else self.input(x))
             h = F_mod.normalize(h, p=2, dim=1)
             for layer in self.layers:
                 if self.encoder_type == "graphsage":
@@ -1531,7 +1600,7 @@ def build_grace_embeddings(
                 h = residual * h + (1.0 - residual) * aggregated
                 h = F_mod.relu(h)
                 h = F_mod.normalize(h, p=2, dim=1)
-            return h
+            return F_mod.normalize(self.output(h), p=2, dim=1)
 
         def project(self, h: Any) -> Any:
             return self.projector(h)
@@ -1540,15 +1609,19 @@ def build_grace_embeddings(
     optimizer = torch_mod.optim.Adam(encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     trace: list[dict[str, float]] = []
-    final_embeddings = torch_mod.zeros((len(qids), dim), dtype=torch_mod.float32, device=device_obj)
+    final_embeddings = torch_mod.zeros((len(qids), output_dim), dtype=torch_mod.float32, device=device_obj)
     effective_batch_size = max(2, min(int(max(batch_size, 1)), len(qids)))
 
     for epoch in range(epochs):
         encoder.train()
         optimizer.zero_grad()
 
-        view1_features = _drop_feature_columns(base_features, drop_feature_rate_1, rng)
-        view2_features = _drop_feature_columns(base_features, drop_feature_rate_2, rng)
+        if use_embedding:
+            view1_features = base_features
+            view2_features = base_features
+        else:
+            view1_features = _drop_feature_columns(base_features, drop_feature_rate_1, rng)
+            view2_features = _drop_feature_columns(base_features, drop_feature_rate_2, rng)
         view1_edges = _drop_edge_pairs(edge_pairs, drop_edge_rate_1, rng)
         view2_edges = _drop_edge_pairs(edge_pairs, drop_edge_rate_2, rng)
         view1_adjacency = _sparse_adjacency_from_edges(len(qids), view1_edges, device=device_obj)
@@ -1642,7 +1715,8 @@ def build_grace_embeddings(
         "root_qid": graph.graph.get("root_qid"),
         "objective": "contrastive_learning",
         "parameters": {
-            "dim": dim,
+            "hidden_dim": hidden_dim,
+            "output_dim": output_dim,
             "proj_dim": projector_dim,
             "layers": layers,
             "residual": residual,
@@ -1690,7 +1764,7 @@ def _transe_negative_sample(
 
 def build_transe_embeddings(
     graph: nx.DiGraph,
-    dim: int = 128,
+    output_dim: int = 128,
     epochs: int = 200,
     learning_rate: float = 0.001,
     margin: float = 1.0,
@@ -1704,7 +1778,7 @@ def build_transe_embeddings(
 
     qids = sorted(str(node) for node in graph.nodes())
     if not qids:
-        empty = np.zeros((0, dim), dtype=np.float32)
+        empty = np.zeros((0, output_dim), dtype=np.float32)
         return EmbeddingStore(
             qids=[],
             embeddings=empty,
@@ -1715,7 +1789,7 @@ def build_transe_embeddings(
                 "graph_type": graph.graph.get("graph_type"),
                 "root_qid": graph.graph.get("root_qid"),
                 "parameters": {
-                    "dim": dim,
+                    "output_dim": output_dim,
                     "epochs": epochs,
                     "learning_rate": learning_rate,
                     "margin": margin,
@@ -1731,7 +1805,7 @@ def build_transe_embeddings(
     node_to_index = {qid: index for index, qid in enumerate(qids)}
     edges = [(str(source), str(target)) for source, target in graph.edges()]
     if not edges:
-        embeddings = _initial_entity_embeddings(qids=qids, dim=dim, seed=seed)
+        embeddings = _initial_entity_embeddings(qids=qids, dim=output_dim, seed=seed)
         metadata = {
             "algorithm": "transe",
             "implementation": "knowledge_graph_embedding_baseline",
@@ -1739,7 +1813,7 @@ def build_transe_embeddings(
             "graph_type": graph.graph.get("graph_type"),
             "root_qid": graph.graph.get("root_qid"),
                 "parameters": {
-                    "dim": dim,
+                    "output_dim": output_dim,
                     "epochs": epochs,
                     "learning_rate": learning_rate,
                     "margin": margin,
@@ -1753,8 +1827,8 @@ def build_transe_embeddings(
         return EmbeddingStore(qids=qids, embeddings=embeddings, metadata=metadata)
 
     rng = np.random.default_rng(seed)
-    entity_vectors = _initial_entity_embeddings(qids=qids, dim=dim, seed=seed).astype(np.float32, copy=True)
-    relation_vector = rng.normal(0.0, 0.1, size=dim).astype(np.float32)
+    entity_vectors = _initial_entity_embeddings(qids=qids, dim=output_dim, seed=seed).astype(np.float32, copy=True)
+    relation_vector = rng.normal(0.0, 0.1, size=output_dim).astype(np.float32)
     edge_indices = [(node_to_index[source], node_to_index[target]) for source, target in edges if source in node_to_index and target in node_to_index]
     eps = 1e-12
     trace: list[dict[str, float]] = []
@@ -1861,7 +1935,7 @@ def build_transe_embeddings(
         "root_qid": graph.graph.get("root_qid"),
         "relation": "parent_taxon",
         "parameters": {
-            "dim": dim,
+            "output_dim": output_dim,
             "epochs": epochs,
             "learning_rate": learning_rate,
             "margin": margin,
@@ -1905,14 +1979,20 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["node2vec", "gcn", "grace", "transe", "graphsage"],
         default="node2vec",
     )
-    parser.add_argument("--dim", type=int, default=128)
+    parser.add_argument(
+        "--hidden-dim",
+        type=int,
+        default=32,
+        help="Hidden dimension for GCN, GraphSAGE, and GRACE.",
+    )
+    parser.add_argument("--output-dim", type=int, default=128)
     parser.add_argument("--proj-dim", type=int, default=128)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--initial-features",
-        choices=["degree", "depth", "one_hot", "constant", "random"],
-        default="degree",
-        help="Initial node features for GCN/GraphSAGE/GRACE; depth uses root_qid to measure taxonomy depth.",
+        choices=["degree", "depth", "embedding"],
+        default="embedding",
+        help="Initial node features for GCN/GraphSAGE/GRACE.",
     )
 
     parser.add_argument("--walk-length", type=int, default=40)
@@ -1962,7 +2042,6 @@ def main(argv: list[str] | None = None) -> int:
     run_tag = _run_timestamp_mmddhhmm()
 
     common_kwargs: dict[str, Any] = {
-        "dim": args.dim,
         "seed": args.seed,
     }
 
@@ -1975,9 +2054,12 @@ def main(argv: list[str] | None = None) -> int:
             negative_samples=args.negative_samples,
             epochs=args.epochs,
             learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
+            output_dim=args.output_dim,
             p=args.p,
             q=args.q,
             undirected=args.undirected,
+            device=args.device,
             **common_kwargs,
         )
         node2vec_dir = output_root / "node2vec" / run_tag
@@ -1987,8 +2069,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.algorithm == "gcn":
         gcn_store = build_gcn_embeddings(
             graph,
+            output_dim=args.output_dim,
+            hidden_dim=args.hidden_dim,
             layers=args.layers,
             residual=args.residual,
+            epochs=args.epochs,
+            learning_rate=args.learning_rate,
+            negative_samples=args.negative_samples,
             feature_mode=args.initial_features,
             weight_decay=args.weight_decay,
             undirected=args.undirected,
@@ -2002,10 +2089,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.algorithm == "graphsage":
         graphsage_store = build_graphsage_embeddings(
             graph,
+            output_dim=args.output_dim,
+            hidden_dim=args.hidden_dim,
             layers=args.layers,
             residual=args.residual,
             epochs=args.epochs,
             learning_rate=args.learning_rate,
+            weight_decay=args.weight_decay,
             negative_samples=args.negative_samples,
             num_neighbors_1=args.graphsage_num_neighbors_1,
             num_neighbors_2=args.graphsage_num_neighbors_2,
@@ -2022,6 +2112,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.algorithm == "grace":
         grace_store = build_grace_embeddings(
             graph,
+            output_dim=args.output_dim,
+            hidden_dim=args.hidden_dim,
             layers=args.layers,
             residual=args.residual,
             proj_dim=args.proj_dim,
@@ -2052,7 +2144,7 @@ def main(argv: list[str] | None = None) -> int:
             p_norm=args.p_norm,
             weight_decay=args.weight_decay,
             root_qid=args.root_qid,
-            dim=args.dim,
+            output_dim=args.output_dim,
             seed=args.seed,
         )
         transe_dir = output_root / "transe" / run_tag

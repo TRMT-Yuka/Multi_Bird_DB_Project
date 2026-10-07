@@ -82,8 +82,6 @@ graph 埋め込みは **Node2Vec / GCN / GRACE / GraphSAGE / TransE** の 5 手�
   - `make build-transe-embeddings`
 - まとめて設定を変えたい場合
   - `make build-embeddings EMBEDDING_ALGORITHM=<node2vec|gcn|grace|transe|graphsage>`
-- graph 埋め込みのクラスタリング評価とレポートを作りたい場合
-  - `make evaluate-graph-embeddings`
 - コードの構文確認だけしたい場合
   - `make verify`
 
@@ -158,29 +156,54 @@ make build-embeddings
 以下は現在の最終既定値です。`make build-*-embeddings` はこの値をベースに動きます。
 
 - `node2vec`
-  - 既定値: `dim=128`, `walk_length=40`, `num_walks=10`, `window_size=10`, `negative_samples=5`, `epochs=200`, `learning_rate=0.001`, `p=1.0`, `q=1.0`, `seed=42`, `undirected=False`
+  - 既定値: `output_dim=128`, `walk_length=40`, `num_walks=10`, `window_size=10`, `negative_samples=5`, `epochs=200`, `learning_rate=0.001`, `weight_decay=1e-5`, `p=1.0`, `q=1.0`, `seed=42`, `undirected=False`
 - `gcn`
-  - 既定値: `dim=128`, `layers=1`, `residual=0.0`, `epochs=300`, `learning_rate=0.01`, `negative_samples=20`, `feature_mode=degree`, `weight_decay=0.0`, `seed=42`, `root_qid=None`, `undirected=False`
+  - 既定値: `hidden_dim=32`, `output_dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.01`, `negative_samples=20`, `feature_mode=embedding`, `weight_decay=1e-5`, `seed=42`, `root_qid=None`, `undirected=False`
 - `grace`
-  - 既定値: `dim=128`, `proj_dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `tau=0.5`, `drop_edge_rate_1=0.2`, `drop_edge_rate_2=0.4`, `drop_feature_rate_1=0.0`, `drop_feature_rate_2=0.0`, `batch_size=256`, `encoder_type=gcn`, `feature_mode=degree`, `weight_decay=1e-5`, `device=cpu`, `seed=42`, `root_qid=None`, `undirected=False`
+  - 既定値: `hidden_dim=32`, `output_dim=128`, `proj_dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `tau=0.5`, `drop_edge_rate_1=0.2`, `drop_edge_rate_2=0.4`, `drop_feature_rate_1=0.0`, `drop_feature_rate_2=0.0`, `batch_size=256`, `encoder_type=gcn`, `feature_mode=embedding`, `weight_decay=1e-5`, `device=cpu`, `seed=42`, `root_qid=None`, `undirected=False`
 - `graphsage`
-  - `make build-graphsage-embeddings` の既定値: `dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `negative_samples=1`, `num_neighbors=[8,4]`, `feature_mode=degree`, `device=cuda`, `seed=42`, `root_qid=None`, `undirected=False`
+  - `make build-graphsage-embeddings` の既定値: `hidden_dim=32`, `output_dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.001`, `negative_samples=1`, `num_neighbors=[25,10]`, `feature_mode=embedding`, `weight_decay=1e-5`, `device=cuda`, `seed=42`, `root_qid=None`, `undirected=False`
 - `transe`
-  - 既定値: `dim=128`, `epochs=200`, `learning_rate=0.001`, `margin=1.0`, `negative_samples=10`, `p_norm=1`, `weight_decay=1e-5`, `seed=42`, `root_qid=None`
+  - 既定値: `output_dim=128`, `epochs=200`, `learning_rate=0.001`, `margin=1.0`, `negative_samples=10`, `p_norm=1`, `weight_decay=1e-5`, `seed=42`, `root_qid=None`
   - `p_norm=1` なので L1 距離版として扱う
 
-`gcn`、`graphsage`、`grace` の初期ノード特徴は `--initial-features` で変更できます。`degree` が従来の次数特徴、`depth` は `--root-qid` または graph の `root_qid` から parent→child 方向に測った深さを最大深さで正規化した 1 次元特徴です。
+`gcn`、`graphsage`、`grace` の初期ノード特徴は `--initial-features` で変更できます。現在の既定値は `embedding` です。`degree` は従来の次数特徴、`depth` は `--root-qid` または graph の `root_qid` から parent→child 方向に測った深さを最大深さで正規化した 1 次元特徴です。`hidden_dim` は畳み込み内部の隠れ表現の次元、`output_dim` は保存される最終 embedding の次元です。Node2Vec / TransE も `output_dim` で出力次元を指定します。次数特徴へ戻す場合は `--initial-features degree` を指定してください。
+
+利用可能な初期特徴は `degree`、`depth`、`embedding` です。`embedding` はノードごとの学習可能な `torch.nn.Embedding(num_nodes, dim)` を初期値として使います。`embedding` は GCN / GraphSAGE / GRACE で利用でき、`drop-feature` は適用せず、学習可能な embedding table と graph augmentation を学習します。
 
 ```bash
 PYTHONPATH=src python -m multi_bird_db.cli build-embeddings \
   --algorithm gcn --initial-features depth --root-qid Q5113
 ```
 
+ノード ID ベースの学習可能な初期 embedding を使う場合:
+
+```bash
+PYTHONPATH=src python -m multi_bird_db.cli build-embeddings \
+  --algorithm gcn --initial-features embedding --output-dim 128
+```
+
 Make 経由なら次のように指定できます（GCN / GRACE / GraphSAGE 共通）。
 
 ```bash
-make build-gcn-embeddings INITIAL_FEATURES=depth
+make build-gcn-embeddings
 ```
+
+#### 埋め込み run の選択
+
+埋め込み source の確認コマンドは、既定では全 graph 手法を検査します。
+
+```bash
+make inspect-multimodal-sources
+```
+
+GraphSAGE だけを確認する場合は、手法を明示します。
+
+```bash
+make inspect-multimodal-sources INSPECT_GRAPH_EMBEDDING_METHOD=graphsage
+```
+
+`depth` 版かどうかは、検査結果に含まれる run の `metadata.json` にある `parameters.feature_mode` で確認できます。
 
 #### 公式リンク
 
@@ -191,29 +214,6 @@ make build-gcn-embeddings INITIAL_FEATURES=depth
 - `transe`: [論文](https://papers.nips.cc/paper_files/paper/2013/hash/1cecc7a77928ca8133fa24680a88d2f9-Abstract.html)
 
 
-
-### 5. graph 埋め込みをクラスタリング評価する
-
-```bash
-make evaluate-graph-embeddings
-```
-
-前提:
-- `data/processed/graph/bird_taxonomy_graph.pkl`
-- `data/external/embeddings/graph/<method>/<MMDDhhmm>/embeddings.npy`
-
-評価:
-- `k-means` の `k` は真のラベル数に合わせる
-- 真のラベルは既定で `taxon_rank_name`
-- 指標は `NMI`, `ARI`, `Purity`, `Homogeneity`, `Completeness`, `V-measure`, `Silhouette`
-
-生成物:
-- `data/external/embeddings/graph/evaluation/metrics/clustering_metrics.csv`
-- `data/external/embeddings/graph/evaluation/metrics/summary_metrics.csv`
-- `data/external/embeddings/graph/evaluation/plots/clustering_metrics_barplot.png`
-- `data/external/embeddings/graph/evaluation/logs/<method>_cluster_assignments.tsv`
-- `data/external/embeddings/graph/evaluation/report/experiment_report.md`
-- `data/external/embeddings/graph/evaluation/report/experiment_report.json`
 
 ## graph PKL の構造
 

@@ -30,7 +30,7 @@ class GraphEmbeddingTraceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = build_node2vec_embeddings(
                 self.graph,
-                dim=8,
+                output_dim=8,
                 walk_length=4,
                 num_walks=2,
                 window_size=1,
@@ -53,7 +53,7 @@ class GraphEmbeddingTraceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = build_transe_embeddings(
                 self.graph,
-                dim=8,
+                output_dim=8,
                 epochs=3,
                 learning_rate=0.01,
                 margin=1.0,
@@ -74,7 +74,7 @@ class GraphEmbeddingTraceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = build_gcn_embeddings(
                 self.graph,
-                dim=8,
+                hidden_dim=8,
                 layers=2,
                 residual=0.2,
                 epochs=3,
@@ -107,11 +107,30 @@ class GraphEmbeddingTraceTests(unittest.TestCase):
         self.assertEqual(features.shape, (3, 1))
         self.assertEqual(features[:, 0].tolist(), [0.0, 0.5, 1.0])
 
+    def test_trainable_embedding_initial_features(self) -> None:
+        for builder, extra_kwargs in (
+            (build_gcn_embeddings, {}),
+            (build_grace_embeddings, {"proj_dim": 8}),
+            (build_graphsage_embeddings, {"device": "cpu", "num_neighbors_1": 2, "num_neighbors_2": 1}),
+        ):
+            store = builder(
+                self.graph,
+                hidden_dim=8,
+                output_dim=5,
+                epochs=1,
+                feature_mode="embedding",
+                seed=42,
+                root_qid="Q1",
+                **extra_kwargs,
+            )
+            self.assertEqual(store.embeddings.shape, (3, 5))
+            self.assertEqual(store.metadata["parameters"]["feature_mode"], "embedding")
+
     def test_grace_records_training_trace(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             store = build_grace_embeddings(
                 self.graph,
-                dim=8,
+                hidden_dim=8,
                 proj_dim=8,
                 layers=2,
                 residual=0.2,
@@ -145,7 +164,7 @@ class GraphEmbeddingTraceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = build_graphsage_embeddings(
                 self.graph,
-                dim=8,
+                hidden_dim=8,
                 layers=2,
                 residual=0.2,
                 epochs=3,
