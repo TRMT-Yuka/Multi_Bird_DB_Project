@@ -113,18 +113,3 @@ class MultimodalSampleRow:
     modality_pattern: str
     target_rank: str
     target_label: str
-
-
-@dataclass(frozen=True, slots=True)
-class MultimodalFeatureMatrix:
-    """Row-aligned multimodal feature matrix and its sample manifest."""
-
-    rows: list[MultimodalSampleRow]
-    embeddings: np.ndarray
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        if self.embeddings.ndim != 2:
-            raise ValueError(f"Multimodal embeddings must be 2D, got shape {self.embeddings.shape}")
-        if len(self.rows) != int(self.embeddings.shape[0]):
-            raise ValueError("Multimodal feature rows and embeddings row count must match")

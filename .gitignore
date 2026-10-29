@@ -33,4 +33,6 @@ temp/
 xeno_canto_api_key.env
 data/external/audio/
 data/external/documents/
-/experiments/root_short_reproduction/**/
+/experiments/exp1/**/
+/experiments/exp2/**/
+/experiments/exp3/**/

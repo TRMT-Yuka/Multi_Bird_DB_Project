@@ -114,21 +114,11 @@ COMMAND_SPECS: dict[str, CommandSpec] = {
         module="multi_bird_db.graph_dash",
         handler_name="main",
     ),
-    "evaluate-graph-embeddings": CommandSpec(
-        help="Evaluate graph embeddings with clustering metrics and write a report.",
-        module="multi_bird_db.graph_evaluation",
-        handler_name="main",
-    ),
     "inspect-multimodal-sources": CommandSpec(
         help="Inspect multimodal source embedding directories and validate row-aligned files.",
         module="multi_bird_db.multimodal.cli",
         handler_name="main",
-    ),
-    "run-multimodal-baseline": CommandSpec(
-        help="Run the initial multimodal taxon classification baseline.",
-        module="multi_bird_db.multimodal.cli",
-        handler_name="main",
-        argv_prefix=("run-baseline",),
+        argv_prefix=("inspect",),
     ),
     "build-wikipedia-manifest": CommandSpec(
         help="Build a TSV manifest for related English and Japanese Wikipedia articles.",

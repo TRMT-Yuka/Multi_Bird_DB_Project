@@ -24,7 +24,7 @@ from exp1_similarity_matrices import (
 from exp3_sub1_audio_pretraining import load_audio_items
 
 
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp3_search"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "exp3" / "search"
 NDCG_K_VALUES = (10, 50, 100)
 
 

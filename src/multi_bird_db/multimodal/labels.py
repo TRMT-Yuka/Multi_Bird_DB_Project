@@ -97,14 +97,3 @@ def assign_upper_taxon_label(graph: nx.DiGraph, qid: str, target_rank: str) -> T
             distance_to_label=distance,
         )
     return None
-
-
-def assign_labels_for_qids(graph: nx.DiGraph, qids: list[str], target_rank: str) -> list[TaxonLabelAssignment]:
-    """Resolve one upper-taxon label per QID when possible."""
-
-    assignments: list[TaxonLabelAssignment] = []
-    for qid in qids:
-        assignment = assign_upper_taxon_label(graph, qid, target_rank)
-        if assignment is not None:
-            assignments.append(assignment)
-    return assignments

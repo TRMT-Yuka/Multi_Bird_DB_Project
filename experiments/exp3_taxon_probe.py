@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - fallback for minimal environments
         return iterable
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
@@ -33,7 +33,7 @@ from multi_bird_db.multimodal.types import MultimodalSampleRow  # noqa: E402
 from multi_bird_db.taxon_labels import load_cached_taxon_labels  # noqa: E402
 
 
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp3_taxon_probe"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "exp3" / "taxon_probe"
 DEFAULT_SELECTED_RUNS_PATH = PROJECT_ROOT / "data" / "external" / "embeddings" / "selected_runs.json"
 DEFAULT_TAXON_LABELS_PATH = PROJECT_ROOT / "data" / "processed" / "taxonomy" / "qid_taxon_labels.tsv"
 DEFAULT_TARGET_RANKS = "family,order"

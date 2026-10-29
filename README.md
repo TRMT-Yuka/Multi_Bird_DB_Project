@@ -4,6 +4,9 @@
 
 ## README 一覧
 
+- [README_workflow.md](README_workflow.md)
+  - 前処理からExperiment 1～3、サブ実験、成果物管理までの全体ワークフロー
+
 - [README_wikidata_pred.md](README_wikidata_pred.md)
   - `Wikidata 側` の処理です。dump の取得、JSON 抽出、ontology PKL 生成までを扱います
 - [README_graph.md](README_graph.md)
@@ -12,12 +15,8 @@
   - 音声データの配置方針と音声埋め込みの実行手順です
 - [README_experiments.md](README_experiments.md)
   - 各種実験手順です
-- [README_Docker.md](README_Docker.md)
-  - BirdNET の旧 Docker GPU 手順と補助メモです。現在の主経路はホストの `birdnet` conda 環境です
 - [README_language.md](README_language.md)
   - 言語単位の ID と埋め込みの対応付けを整理するメモです
-- [README_retrieval.md](README_retrieval.md)
-  - 各モダリティの埋め込み種類・有無による QID 検索実験の設計です
 
 ## 現在の実装状況
 

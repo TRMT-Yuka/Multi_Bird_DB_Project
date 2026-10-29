@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
@@ -17,7 +17,7 @@ from exp1_similarity_matrices import _load_json, _load_qids  # noqa: E402
 
 
 DEFAULT_SELECTED_RUNS_PATH = PROJECT_ROOT / "data" / "external" / "embeddings" / "selected_runs.json"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp1_qid_coverage"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "exp1" / "qid_coverage"
 
 
 def _write_json(path: Path, payload: object) -> None:

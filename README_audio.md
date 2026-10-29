@@ -205,10 +205,7 @@ conda activate bird_env
 make build-audio-embeddings-perch
 ```
 
-Perch について:
-
-- このリポジトリ内のローカル Docker wrapper は保守しません
-- 別マシン・別環境で `perch` backend を実行し、出力ディレクトリごとこのリポジトリへ戻してください
+Perch は別マシン・別環境で実行し、生成された出力ディレクトリごとこのリポジトリへ戻してください。
 
 直接 CLI を叩く場合:
 

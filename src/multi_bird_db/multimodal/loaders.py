@@ -56,9 +56,9 @@ def _latest_directory(root: Path) -> Path:
     return children[-1]
 
 
-def find_latest_graph_embedding_dir(root: Path | None = None) -> Path:
+def find_latest_graph_embedding_dir(root: Path | None = None, model_name: str = DEFAULT_GRAPH_MODEL) -> Path:
     paths = get_project_paths()
-    return _latest_directory(root or (paths.graph_embeddings_dir / DEFAULT_GRAPH_MODEL))
+    return _latest_directory(root or (paths.graph_embeddings_dir / _safe_component(model_name)))
 
 
 def find_latest_audio_embedding_dir(root: Path | None = None) -> Path:
@@ -78,14 +78,15 @@ def find_latest_language_embedding_dir(root: Path | None = None) -> Path:
 def resolve_default_source_config(
     *,
     graph_embedding_dir: Path | None = None,
+    graph_embedding_method: str = DEFAULT_GRAPH_MODEL,
     audio_embedding_dir: Path | None = None,
     language_embedding_dir: Path | None = None,
 ) -> EmbeddingSourceConfig:
     return EmbeddingSourceConfig(
-        graph_embedding_dir=graph_embedding_dir or find_latest_graph_embedding_dir(),
+        graph_embedding_dir=graph_embedding_dir or find_latest_graph_embedding_dir(model_name=graph_embedding_method),
         audio_embedding_dir=audio_embedding_dir or find_latest_audio_embedding_dir(),
         language_embedding_dir=language_embedding_dir or find_latest_language_embedding_dir(),
-        graph_model_name=DEFAULT_GRAPH_MODEL,
+        graph_model_name=graph_embedding_method,
         audio_model_name=DEFAULT_AUDIO_MODEL,
         language_model_name=DEFAULT_LANGUAGE_MODEL,
         language_code=DEFAULT_LANGUAGE_CODE,

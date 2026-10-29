@@ -712,6 +712,7 @@ def _train_skipgram_negative_sampling_torch(
     seed: int,
     graph: nx.DiGraph,
     device_obj: Any,
+    batch_size: int,
 ) -> tuple[np.ndarray, list[dict[str, float]]]:
     torch_mod, nn_mod, F_mod = _require_torch()
     torch_mod.manual_seed(seed)
@@ -719,8 +720,12 @@ def _train_skipgram_negative_sampling_torch(
         torch_mod.cuda.manual_seed_all(seed)
 
     rng = np.random.default_rng(seed)
-    node_to_index = {qid: index for index, qid in enumerate(qids)}
     noise_probs = torch_mod.tensor(_node_weights(graph, qids), dtype=torch_mod.float32, device=device_obj)
+
+    # Convert walks to integer indices once. Building the same index lists for
+    # every epoch adds substantial Python overhead on large graphs.
+    node_to_index = {qid: index for index, qid in enumerate(qids)}
+    indexed_walks = [[node_to_index[qid] for qid in walk] for walk in walks]
 
     input_embeddings = nn_mod.Embedding(len(qids), dim, device=device_obj)
     output_embeddings = nn_mod.Embedding(len(qids), dim, device=device_obj)
@@ -733,21 +738,22 @@ def _train_skipgram_negative_sampling_torch(
         lr=learning_rate,
         weight_decay=weight_decay,
     )
-    batch_size = 1024
+    batch_size = max(int(batch_size), 1)
     trace: list[dict[str, float]] = []
 
     for epoch in range(epochs):
-        rng.shuffle(walks)
+        walk_order = np.arange(len(indexed_walks), dtype=np.int64)
+        rng.shuffle(walk_order)
         total_loss = 0.0
         pair_count = 0
-        walk_progress_interval = max(len(walks) // 20, 1)
+        positive_pairs: list[tuple[int, int]] = []
+        walk_progress_interval = max(len(indexed_walks) // 20, 1)
         last_progress_time = time.monotonic()
         _render_progress_line(
-            f"node2vec epoch {epoch + 1}/{epochs} | walks 0/{len(walks)} | pairs 0 | loss 0.0000"
+            f"node2vec epoch {epoch + 1}/{epochs} | walks 0/{len(indexed_walks)} | pairs 0 | loss 0.0000"
         )
-        for walk_index, walk in enumerate(walks, start=1):
-            walk_indices = [node_to_index[qid] for qid in walk]
-            positive_pairs: list[tuple[int, int]] = []
+        for walk_index, ordered_index in enumerate(walk_order, start=1):
+            walk_indices = indexed_walks[int(ordered_index)]
             for center_pos, center_index in enumerate(walk_indices):
                 left = max(0, center_pos - window_size)
                 right = min(len(walk_indices), center_pos + window_size + 1)
@@ -756,16 +762,19 @@ def _train_skipgram_negative_sampling_torch(
                         continue
                     positive_pairs.append((center_index, walk_indices[context_pos]))
 
-            pair_count += len(positive_pairs)
-            for batch_start in range(0, len(positive_pairs), batch_size):
-                batch_pairs = positive_pairs[batch_start : batch_start + batch_size]
+            # Process several walks together. This removes one optimizer step
+            # and tensor construction per walk while keeping memory bounded.
+            while len(positive_pairs) >= batch_size:
+                batch_pairs = positive_pairs[:batch_size]
+                del positive_pairs[:batch_size]
+                batch_pair_array = np.asarray(batch_pairs, dtype=np.int64)
                 center_batch = torch_mod.tensor(
-                    [center_index for center_index, _ in batch_pairs],
+                    batch_pair_array[:, 0],
                     dtype=torch_mod.long,
                     device=device_obj,
                 )
                 context_batch = torch_mod.tensor(
-                    [context_index for _, context_index in batch_pairs],
+                    batch_pair_array[:, 1],
                     dtype=torch_mod.long,
                     device=device_obj,
                 )
@@ -793,14 +802,42 @@ def _train_skipgram_negative_sampling_torch(
                 (batch_loss / max(center_batch.shape[0], 1)).backward()
                 optimizer.step()
                 total_loss += float(batch_loss.detach().cpu().item())
+                pair_count += len(batch_pairs)
 
             now = time.monotonic()
             if walk_index % walk_progress_interval == 0 or now - last_progress_time >= 2.0:
                 _render_progress_line(
-                    f"node2vec epoch {epoch + 1}/{epochs} | walks {walk_index}/{len(walks)} | "
+                    f"node2vec epoch {epoch + 1}/{epochs} | walks {walk_index}/{len(indexed_walks)} | "
                     f"pairs {pair_count} | loss {total_loss:.4f}"
                 )
                 last_progress_time = now
+
+        if positive_pairs:
+            batch_pair_array = np.asarray(positive_pairs, dtype=np.int64)
+            center_batch = torch_mod.tensor(batch_pair_array[:, 0], dtype=torch_mod.long, device=device_obj)
+            context_batch = torch_mod.tensor(batch_pair_array[:, 1], dtype=torch_mod.long, device=device_obj)
+            negative_batch = _sample_negative_indices_torch(
+                noise_probs=noise_probs,
+                center_batch=center_batch,
+                context_batch=context_batch,
+                negative_samples=negative_samples,
+            )
+            center_vectors = input_embeddings(center_batch)
+            context_vectors = output_embeddings(context_batch)
+            pos_scores = torch_mod.sum(center_vectors * context_vectors, dim=1)
+            pos_loss = F_mod.softplus(-pos_scores).sum()
+            if negative_batch.numel():
+                negative_vectors = output_embeddings(negative_batch)
+                neg_scores = torch_mod.sum(negative_vectors * center_vectors.unsqueeze(1), dim=2)
+                neg_loss = F_mod.softplus(neg_scores).sum()
+            else:
+                neg_loss = torch_mod.tensor(0.0, dtype=torch_mod.float32, device=device_obj)
+            batch_loss = pos_loss + neg_loss
+            optimizer.zero_grad()
+            (batch_loss / max(center_batch.shape[0], 1)).backward()
+            optimizer.step()
+            total_loss += float(batch_loss.detach().cpu().item())
+            pair_count += len(positive_pairs)
 
         trace.append(
             {
@@ -831,6 +868,7 @@ def _train_skipgram_negative_sampling(
     seed: int,
     graph: nx.DiGraph,
     device: str,
+    batch_size: int,
 ) -> tuple[np.ndarray, list[dict[str, float]], str]:
     normalized = str(device).strip().lower()
     if torch is None:
@@ -863,6 +901,7 @@ def _train_skipgram_negative_sampling(
         seed=seed,
         graph=graph,
         device_obj=device_obj,
+        batch_size=batch_size,
     )
     return embeddings, trace, resolved_device
 
@@ -882,6 +921,7 @@ def build_node2vec_embeddings(
     seed: int = 42,
     undirected: bool = False,
     device: str = "auto",
+    batch_size: int = 8192,
 ) -> EmbeddingStore:
     """Train a node2vec-style embedding using walk-based skip-gram. / node2vec 風の walk ベース埋め込みを学習する。"""
 
@@ -908,6 +948,7 @@ def build_node2vec_embeddings(
         seed=seed,
         graph=graph,
         device=device,
+        batch_size=batch_size,
     )
 
     metadata = {
@@ -928,6 +969,7 @@ def build_node2vec_embeddings(
             "q": q,
             "seed": seed,
             "undirected": undirected,
+            "batch_size": batch_size,
             "device": device,
             "resolved_device": resolved_device,
         },
@@ -2014,6 +2056,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--drop-feature-rate-1", type=float, default=0.0)
     parser.add_argument("--drop-feature-rate-2", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--node2vec-batch-size", type=int, default=8192)
     parser.add_argument("--grace-encoder", choices=["gcn", "graphsage"], default="gcn")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--graphsage-num-neighbors-1", type=int, default=25)
@@ -2060,6 +2103,7 @@ def main(argv: list[str] | None = None) -> int:
             q=args.q,
             undirected=args.undirected,
             device=args.device,
+            batch_size=args.node2vec_batch_size,
             **common_kwargs,
         )
         node2vec_dir = output_root / "node2vec" / run_tag

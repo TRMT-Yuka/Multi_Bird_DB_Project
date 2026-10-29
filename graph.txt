@@ -86,7 +86,6 @@
    - graphsage_train_log.csv
 
 3. metrics/
-   - clustering_metrics.csv
    - link_prediction_metrics.csv
    - summary_metrics.csv
 
@@ -101,13 +100,10 @@
    - positive_negative_distance_transe.png
    - embedding_norms.png
    - embedding_variance.png
-   - clustering_metrics_barplot.png
    - tsne_embeddings_each_method.png
    - umap_embeddings_each_method.png
 
 5. report/
-   - experiment_report.md
-   - experiment_report.json
 
 比較上の重要ルール:
 - loss値そのものを手法間で直接比較しない。
@@ -190,15 +186,11 @@ sum max(0, gamma + d_pos - d_neg)
 
 条件:
 - 音声・テキスト特徴は使わない。
-- 初期特徴は以下を設定で選択できるようにする。
-  a. degree feature
-  b. one-hot identity feature
-  c. constant feature
-  d. fixed random feature
+- 初期特徴は `degree`、`depth`、学習可能な `embedding` から設定で選択できるようにする。
 
 推奨:
-- 構造のみ比較では degree feature を主設定にする。
-- one-hot identity feature は transductive 設定として別枠で報告する。
+- 構造のみ比較では degree または depth feature を主設定にする。
+- ノード ID を学習可能な初期値として使う場合は embedding feature を使う。
 
 学習:
 - 教師ありcross entropyは使わない。
@@ -236,7 +228,7 @@ L_gcn_gae =
 条件:
 - 音声・テキスト特徴は使わない。
 - 初期特徴は GCN と同じ方針。
-- inductive 性を確認する場合、one-hot identity は使わず、degree feature または structural feature を使う。
+- inductive 性を確認する場合は、degree feature または depth feature を使う。
 
 学習:
 - 教師なしGraphSAGEとして実装する。
@@ -271,8 +263,7 @@ L_graphsage =
 - 構造のみのGRACEとして設計する。
 - 初期特徴は GCN と同じ方針。
 - 主なaugmentationは edge dropout とする。
-- feature masking は、degree feature や random feature を使う場合のみ補助的に使う。
-- one-hot identity feature に対するfeature maskingは解釈に注意する。
+- feature masking は使用しない。
 
 ビュー生成:
 - 元グラフ A から2つの構造摂動ビューを作る。

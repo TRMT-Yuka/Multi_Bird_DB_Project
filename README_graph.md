@@ -156,7 +156,7 @@ make build-embeddings
 以下は現在の最終既定値です。`make build-*-embeddings` はこの値をベースに動きます。
 
 - `node2vec`
-  - 既定値: `output_dim=128`, `walk_length=40`, `num_walks=10`, `window_size=10`, `negative_samples=5`, `epochs=200`, `learning_rate=0.001`, `weight_decay=1e-5`, `p=1.0`, `q=1.0`, `seed=42`, `undirected=False`
+  - 既定値: `output_dim=128`, `walk_length=40`, `num_walks=10`, `window_size=10`, `negative_samples=5`, `epochs=200`, `learning_rate=0.001`, `weight_decay=1e-5`, `p=1.0`, `q=1.0`, `seed=42`, `undirected=False`, `batch_size=8192`
 - `gcn`
   - 既定値: `hidden_dim=32`, `output_dim=128`, `layers=2`, `residual=0.0`, `epochs=200`, `learning_rate=0.01`, `negative_samples=20`, `feature_mode=embedding`, `weight_decay=1e-5`, `seed=42`, `root_qid=None`, `undirected=False`
 - `grace`

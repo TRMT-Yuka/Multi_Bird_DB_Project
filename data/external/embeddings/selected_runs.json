@@ -3,10 +3,10 @@
   "selection_policy": "Use only complete runs with embeddings.npy and qids.json. Audio runs must also have audio_manifest.tsv.",
   "runs": {
     "graph": {
-      "gcn": "data/external/embeddings/graph/gcn/05231851",
-      "grace": "data/external/embeddings/graph/grace/05231854",
-      "graphsage": "data/external/embeddings/graph/graphsage/07030546",
-      "node2vec": "data/external/embeddings/graph/node2vec/06280918",
+      "gcn": "data/external/embeddings/graph/gcn/10071312",
+      "grace": "data/external/embeddings/graph/grace/10071317",
+      "graphsage": "data/external/embeddings/graph/graphsage/10071316",
+      "node2vec": "data/external/embeddings/graph/node2vec/10071453",
       "transe": "data/external/embeddings/graph/transe/05231858"
     },
     "language": {
@@ -17,11 +17,7 @@
       "birdnet_acoustic_2_4_pb_07300911": "data/external/embeddings/audio/birdnet/birdnet-acoustic-2.4-pb/07300911",
       "perch_07300906": "data/external/embeddings/audio/perch/perch/07300906",
       "wav2vec2_base": "data/external/embeddings/audio/wav2vec2/facebook_wav2vec2-base-960h/06300702",
-      "wav2vec2_finetuned_model_0": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_0/07300813",
-      "wav2vec2_finetuned_model_1": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_1/07300858",
-      "wav2vec2_finetuned_model_2": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_2/07300942",
-      "wav2vec2_finetuned_model_3": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_3/07301028",
-      "wav2vec2_finetuned_model_4": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_4/07301111"
+      "wav2vec2_finetuned_model_1": "data/external/embeddings/audio/wav2vec2-finetuned/wav2vec2/wav2vec2-model_1/07300858"
     }
   },
   "pending_runs": {
@@ -29,7 +25,7 @@
   },
   "notes": [
     "BirdNET and Perch completion runs are now selected in runs.audio.",
-    "wav2vec2 fine-tuned model_0..4 embedding runs are complete and selected for downstream experiments.",
+    "wav2vec2 fine-tuned model_1 embedding run is selected for downstream experiments.",
     "Experiment code should prefer this file over auto-discovery when present."
   ]
 }

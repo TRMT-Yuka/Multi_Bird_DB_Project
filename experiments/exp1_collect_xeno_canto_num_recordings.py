@@ -8,7 +8,7 @@ import pickle
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEMP_CACHE_ROOT = PROJECT_ROOT / "temp" / "matplotlib"
 os.environ.setdefault("MPLCONFIGDIR", str(TEMP_CACHE_ROOT / "mplconfig"))
 os.environ.setdefault("XDG_CACHE_HOME", str(TEMP_CACHE_ROOT / "xdg_cache"))
@@ -23,7 +23,7 @@ from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 DEFAULT_API_RECORDINGS_ROOT = PROJECT_ROOT / "data" / "interim" / "xeno-canto" / "api_recordings"
 DEFAULT_XENO_CANTO_IDS_PATH = PROJECT_ROOT / "data" / "interim" / "wikidata" / "bird_xeno_canto_ids.tsv"
 DEFAULT_GRAPH_PATH = PROJECT_ROOT / "data" / "processed" / "graph" / "bird_taxonomy_graph.pkl"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "root_short_reproduction" / "exp1_xeno_canto_num_recordings"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "experiments" / "exp1" / "xeno_canto_num_recordings"
 
 
 def _load_json(path: Path) -> object:
@@ -210,30 +210,6 @@ def main(argv: list[str] | None = None) -> int:
         output_dir / "missing_page001_qids.tsv",
         ({"qid": qid} for qid in summary["missing_page001_qids"]),
         ["qid"],
-    )
-    _write_tsv(
-        output_dir / "top_100_qids.tsv",
-        (
-            {
-                "rank": index + 1,
-                "qid": row["qid"],
-                "xeno_canto_species_id": row["xeno_canto_species_id"],
-                "ja_name": row["ja_name"],
-                "num_recordings": row["num_recordings"],
-                "page001_recordings": row["page001_recordings"],
-                "num_pages": row["num_pages"],
-            }
-            for index, row in enumerate(rows[:100])
-        ),
-        [
-            "rank",
-            "qid",
-            "xeno_canto_species_id",
-            "ja_name",
-            "num_recordings",
-            "page001_recordings",
-            "num_pages",
-        ],
     )
     _plot_num_recordings_distribution(rows, output_dir / "num_recordings_distribution.png")
     _plot_num_recordings_distribution_log(rows, output_dir / "num_recordings_distribution_log.png")

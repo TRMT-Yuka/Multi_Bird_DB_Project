@@ -5,6 +5,7 @@ EMBEDDING_ALGORITHM ?= node2vec
 INITIAL_FEATURES ?= embedding
 OUTPUT_DIM ?= 128
 HIDDEN_DIM ?= 32
+NODE2VEC_BATCH_SIZE ?= 8192
 INSPECT_GRAPH_EMBEDDING_METHOD ?= all
 EXP3_TARGET_RANKS ?= family,order
 EXP3_ARGS ?=
@@ -13,7 +14,7 @@ TAXON_GRAPH_INPUT ?=
 TAXON_ONTOLOGY_INPUT ?=
 TAXON_OUTPUT_DIR ?=
 
-.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json fetch-xeno-canto-species-pages extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-gpu build-audio-embeddings-wav2vec2 build-audio-embeddings-wav2vec2-finetuned finetune-wav2vec2-crossval repair-xeno-canto-audio build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-taxon-labels build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings inspect-multimodal-sources run-exp1-simmatrix run-exp1-simmatrix-ordered run-exp2-integrated-graph run-exp3-sub1-audio run-exp3-search run-exp3-taxon-probe report-qid-coverage collect-xeno-canto-num-recordings build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
+.PHONY: extract-qids extract-dump-json download-wikidata-dump build-ontology extract-xeno-canto-ids fetch-xeno-canto-recording-json extract-xeno-canto-recording-ids fetch-xeno-canto-audio download-audio-models check-birdnet-gpu build-audio-embeddings-wav2vec2 build-audio-embeddings-wav2vec2-finetuned finetune-wav2vec2-crossval repair-xeno-canto-audio build-audio-embeddings-birdnet build-audio-embeddings-birdnet-gpu build-audio-embeddings-perch build-graph build-taxon-labels build-sqlite build-embeddings build-node2vec-embeddings build-gcn-embeddings build-grace-embeddings build-graphsage-embeddings build-transe-embeddings inspect-multimodal-sources run-exp1-simmatrix run-exp1-simmatrix-ordered run-exp2-integrated-graph run-exp3-sub1-audio run-exp3-search run-exp3-taxon-probe report-qid-coverage collect-xeno-canto-num-recordings build-language-surface-manifest build-language-embeddings check-gpu serve-graph build-wikipedia-manifest fetch-wikipedia-xml extract-wikipedia-text verify
 
 extract-qids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-qids
@@ -32,9 +33,6 @@ extract-xeno-canto-ids:
 
 fetch-xeno-canto-recording-json:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli fetch-xeno-canto-recording-json
-
-fetch-xeno-canto-species-pages:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli fetch-xeno-canto-species-pages
 
 extract-xeno-canto-recording-ids:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli extract-xeno-canto-recording-ids
@@ -91,7 +89,7 @@ build-embeddings:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm $(EMBEDDING_ALGORITHM)
 
 build-node2vec-embeddings:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm node2vec
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm node2vec --node2vec-batch-size $(NODE2VEC_BATCH_SIZE)
 
 build-gcn-embeddings:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-embeddings --algorithm gcn --hidden-dim $(HIDDEN_DIM) --layers 2 --epochs 200 --learning-rate 0.01 --negative-samples 20 --weight-decay 1e-5 --output-dim $(OUTPUT_DIM) --initial-features $(INITIAL_FEATURES)
@@ -109,27 +107,27 @@ inspect-multimodal-sources:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli inspect-multimodal-sources --graph-embedding-method $(INSPECT_GRAPH_EMBEDDING_METHOD)
 
 run-exp1-simmatrix:
-	$(PYTHON) experiments/root_short_reproduction/exp1_similarity_matrices.py
+	$(PYTHON) experiments/exp1_similarity_matrices.py
 
 run-exp1-simmatrix-ordered:
-	$(PYTHON) experiments/root_short_reproduction/exp1_similarity_matrices_ordered.py
+	$(PYTHON) experiments/exp1_similarity_matrices_ordered.py
 
 run-exp2-integrated-graph:
-	$(PYTHON) experiments/root_short_reproduction/exp2_integrated_embedding_graphs.py
+	$(PYTHON) experiments/exp2_integrated_embedding_graphs.py
 
 run-exp3-sub1-audio:
-	$(PYTHON) experiments/root_short_reproduction/exp3_sub1_audio_pretraining.py
+	$(PYTHON) experiments/exp3_sub1_audio_pretraining.py
 
 run-exp3-search:
-	$(PYTHON) experiments/root_short_reproduction/exp3_taxon_probe.py --target-ranks $(EXP3_TARGET_RANKS) $(EXP3_ARGS)
+	$(PYTHON) experiments/exp3_taxon_probe.py --target-ranks $(EXP3_TARGET_RANKS) $(EXP3_ARGS)
 
 run-exp3-taxon-probe: run-exp3-search
 
 report-qid-coverage:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) experiments/root_short_reproduction/exp0_qid_coverage.py
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) experiments/exp0_qid_coverage.py
 
 collect-xeno-canto-num-recordings:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) experiments/root_short_reproduction/exp1_collect_xeno_canto_num_recordings.py
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) experiments/exp1_collect_xeno_canto_num_recordings.py
 
 build-language-surface-manifest:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m multi_bird_db.cli build-language-surface-manifest
