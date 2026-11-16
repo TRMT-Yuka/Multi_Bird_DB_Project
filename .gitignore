@@ -36,3 +36,8 @@ data/external/documents/
 /experiments/exp1/**/
 /experiments/exp2/**/
 /experiments/exp3/**/
+
+# Workflow source files not tracked; editable Draw.io diagram remains tracked
+/workflow/README.md
+/workflow/cards.txt
+/workflow/structure.json
