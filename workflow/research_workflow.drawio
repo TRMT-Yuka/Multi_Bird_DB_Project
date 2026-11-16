@@ -1,0 +1,138 @@
+<mxfile host="app.diagrams.net" modified="2026-11-16T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="research-workflow" name="研究処理フローチャート">
+    <mxGraphModel dx="2200" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="W00" value="0. 対象範囲・外部検索&#xa;入力：Q5113の子孫検索定義&#xa;処理：Q5113の下部に所属する全ノードを外部検索し、item列を保存&#xa;出力：query.tsv&#xa;未確認：検索日時・Wikidata版" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1"><mxGeometry x="20" y="40" width="260" height="130" as="geometry"/></mxCell>
+        <mxCell id="P01A" value="1A. Dump準備&#xa;入力：Wikidata entities dump&#xa;処理：対象QIDのentity JSONを抽出可能にする&#xa;出力：data/raw/wikidata/dumps/latest-all.json.bz2&#xa;未確認：版・取得時点・hash" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1"><mxGeometry x="340" y="20" width="270" height="130" as="geometry"/></mxCell>
+        <mxCell id="P01B" value="1B. 対象QIDリスト&#xa;入力：query.tsv/item&#xa;処理：URL末尾QIDを抽出、順序保持で重複除去、Q5113を必要時先頭追加&#xa;出力：bird_qids.tsv&#xa;Wikidata再検索なし" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1"><mxGeometry x="340" y="190" width="270" height="130" as="geometry"/></mxCell>
+        <mxCell id="P02" value="2. entity JSON抽出&#xa;入力：dump + bird_qids.tsv&#xa;処理：対象QIDだけ抽出。既存JSONは再利用・上書きなし&#xa;出力：data/interim/wikidata/json/&lt;shard&gt;/Qxxxx.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1"><mxGeometry x="660" y="105" width="270" height="140" as="geometry"/></mxCell>
+        <mxCell id="P03" value="3. ontology生成&#xa;入力：QID別entity JSON&#xa;処理：名称・別名・画像・Xeno ID・rank・parent・Wikipedia・pathを1レコードへ変換&#xa;出力：bird_ontology.pkl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" vertex="1" parent="1"><mxGeometry x="980" y="105" width="270" height="140" as="geometry"/></mxCell>
+
+        <mxCell id="P04G" value="4A. taxonomy graph&#xa;入力：bird_ontology.pkl&#xa;処理：QIDをノード、parent→childを有向辺。逆辺なし。未知の親はplaceholder&#xa;出力：bird_taxonomy_graph.pkl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1320" y="20" width="280" height="145" as="geometry"/></mxCell>
+        <mxCell id="P04L" value="4B. 言語表層形&#xa;入力：ontology&#xa;処理：en_name→enwiki_title、ja_name→jawiki_title。空/重複除去、ordinal付与&#xa;出力：surface_manifest.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1320" y="190" width="280" height="145" as="geometry"/></mxCell>
+        <mxCell id="P04TL" value="4D. Taxon labels&#xa;入力：taxonomy graph&#xa;処理：対象自身を除外し親方向へ。指定rankの最近傍祖先を1つ採用。欠損/循環/一致なしは空欄&#xa;出力：qid_taxon_labels.tsv/json/meta" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1320" y="360" width="280" height="150" as="geometry"/></mxCell>
+        <mxCell id="P04X" value="4C. Xeno対象抽出&#xa;入力：ontology + graph&#xa;処理：species IDを持つgraph末端QID（out_degree=0）を抽出&#xa;出力：bird_xeno_canto_ids.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1320" y="535" width="280" height="135" as="geometry"/></mxCell>
+
+        <mxCell id="P05" value="5. API録音情報&#xa;入力：末端QID/species ID&#xa;処理：sp（hyphen→space）、q:A、page=1、per_page=20、since=2025-05-01&#xa;出力：api_recordings/&lt;QID&gt;/page*.json、manifest、summary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1640" y="535" width="285" height="150" as="geometry"/></mxCell>
+        <mxCell id="P06" value="6. 録音ID対応表&#xa;入力：API page JSON&#xa;処理：ページ順に録音ID抽出、重複除去&#xa;出力：recording_map.json（QID→recording_ids）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="1965" y="535" width="275" height="135" as="geometry"/></mxCell>
+        <mxCell id="P07" value="7. 音声取得&#xa;入力：対象QID + recording_map&#xa;処理：先頭から最大20件、品質A。失敗時に補充なし。既存再利用。15秒超を切出し&#xa;出力：raw/xeno-canto/&lt;QID&gt;/&lt;recording_id&gt;、manifest、summary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="2280" y="535" width="285" height="155" as="geometry"/></mxCell>
+
+        <mxCell id="P08W" value="8W. wav2vec2&#xa;入力：音声ファイル&#xa;処理：16kHz・ファイル全体。facebook/wav2vec2-base-960h、時間平均&#xa;出力：embeddings.npy、audio_ids、qids、audio_manifest、metadata、failed、summary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1"><mxGeometry x="2600" y="20" width="285" height="150" as="geometry"/></mxCell>
+        <mxCell id="P08B" value="8B. BirdNET&#xa;入力：音声ファイル&#xa;処理：acoustic 2.4、48kHz、3秒窓、overlap=0、CPU=tf/GPU=pb&#xa;出力：embeddings.npy、audio_manifest、metadata、failed、summary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1"><mxGeometry x="2600" y="200" width="285" height="145" as="geometry"/></mxCell>
+        <mxCell id="P08P" value="8P. Perch&#xa;入力：音声ファイル（別環境）&#xa;処理：旧公式Perch、32kHz、5秒窓、overlap=0&#xa;出力：embeddings.npy、audio_manifest、metadata、summary&#xa;未確認：checkpoint・出力層・時間集約" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1"><mxGeometry x="2600" y="375" width="285" height="155" as="geometry"/></mxCell>
+
+        <mxCell id="P09G" value="9A. グラフ埋込み&#xa;入力：taxonomy graph&#xa;処理：QID昇順、initial=embedding、self-loop、parent→child、undirected=false、seed=42。GCN/GraphSAGE/GRACE/Node2Vec/TransEの設定をmetadataへ保存&#xa;出力：graph/&lt;method&gt;/&lt;run&gt;/embeddings.npy、qids.json、metadata、trace" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1"><mxGeometry x="2920" y="20" width="310" height="180" as="geometry"/></mxCell>
+        <mxCell id="P09L" value="9B. 言語埋込み&#xa;入力：surface_manifest.tsv&#xa;処理：英語BERT/日本語BERT、max_length=32、padding・truncation、attention mask mean pooling。特殊tokenは別途除外しない&#xa;出力：language/&lt;lang&gt;/&lt;run&gt;/embeddings.npy、surface_ids、qids、qid_to_surfaces、manifest、metadata、summary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;" vertex="1" parent="1"><mxGeometry x="2920" y="230" width="310" height="170" as="geometry"/></mxCell>
+
+        <mxCell id="P10" value="10. 行対応・run選択&#xa;入力：graph/language/audio各run、selected_runs.json&#xa;処理：行対応をmanifestで固定。言語はQIDごと先頭表層形、音声は(QID,relative_path)窓平均。selected_runs優先、なければcomplete run探索。13Bはselectedのみ&#xa;出力：実験入力run集合・代表値対応" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3260" y="110" width="305" height="175" as="geometry"/></mxCell>
+        <mxCell id="P11C" value="11C. 共通QID集合&#xa;入力：選択runのQID/音声対応&#xa;処理：モダリティ間交差。音声は共通(QID,relative_path)後のQID集合&#xa;出力：common_qids.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3600" y="20" width="260" height="135" as="geometry"/></mxCell>
+        <mxCell id="P11R" value="11R. 録音数集計&#xa;入力：API page001&#xa;処理：API numRecordingsをQID単位で収集。ローカル音声数とは別&#xa;出力：qid_num_recordings.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3600" y="180" width="260" height="125" as="geometry"/></mxCell>
+        <mxCell id="P11Q" value="11Q. coverage集計&#xa;入力：run QID集合、共通QID&#xa;処理：qid_count、他モダリティ交差のcomplete_qid_countを計算&#xa;出力：run_qid_counts.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3600" y="330" width="260" height="125" as="geometry"/></mxCell>
+
+        <mxCell id="P12A" value="12A. Exp1通常版&#xa;入力：各run&#xa;処理：全run共通QID、QID昇順、L2正規化、S=XX^T、対角=1。上三角k=1&#xa;出力：similarity.npy、heatmap、distribution、matrix_qids、summary、代表audio、metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3900" y="20" width="285" height="160" as="geometry"/></mxCell>
+        <mxCell id="P12B" value="12B. Exp1録音数順版&#xa;入力：各run、common_qids、録音数表&#xa;処理：表に存在するQIDのみ。録音数降順/QID昇順で上位100件。欠落runは作成しない&#xa;出力：heatmap、distribution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3900" y="210" width="285" height="145" as="geometry"/></mxCell>
+        <mxCell id="P12C" value="12C. Exp2統合graph&#xa;入力：G/L/A run、common_qids、録音数表、taxonomy graph&#xa;処理：上位100件。各modality上三角のp95閾値、score以上を辺。pairをunionしweight=max。union_thresholdは再選別せずmetadata/タイトル。全QID・孤立ノードを描画、layout共有&#xa;出力：graph/language/audio/integrated.svg、metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3900" y="385" width="285" height="180" as="geometry"/></mxCell>
+        <mxCell id="P13A" value="13A. Exp3音声検索&#xa;入力：audio runのみ&#xa;処理：窓を録音平均。同一pathを除外。同一QID別録音を正解。正解0 query除外。cosine降順・stable mergesort。APは全候補、MRRは最初の正解。AP@10なし&#xa;出力：per_query.tsv、summary.tsv、metadata.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3900" y="595" width="285" height="165" as="geometry"/></mxCell>
+        <mxCell id="P13B" value="13B. Exp3 Taxon probe&#xa;入力：taxon labels + selected G/L/A run&#xa;処理：rank別共通QID、G/L/A代表値、pattern連結。分割なし。自己除外、同一labelを正解、top_k=10。P/R/F1/AP@10/RRを計算。正解0も平均含む&#xa;出力：pattern/rank/run別per_query、summary、metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="3900" y="790" width="285" height="165" as="geometry"/></mxCell>
+        <mxCell id="P14" value="14. Taxon probe結果集約&#xa;入力：13Bのみ&#xa;処理：G/L/A/GL/GA/LA/GLAをrank・run組合せ別に集約。13A/12A/12B/12Cは入力しない&#xa;出力：exp3/taxon_probe/以下のper_query、summary、metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1"><mxGeometry x="4240" y="790" width="285" height="155" as="geometry"/></mxCell>
+        <mxCell id="P15" value="15. 再現用成果物固定&#xa;入力：全入力・run・QID・label・代表値・結果&#xa;処理：embedding本体と行対応、selected_runs、common_qids、録音数、labels、manifest、metadataを一組で保管。未記録の日時/hash/版は固定済みと扱わない&#xa;出力：再現用成果物一式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;" vertex="1" parent="1"><mxGeometry x="4580" y="400" width="300" height="180" as="geometry"/></mxCell>
+
+        <mxCell id="O01" value="query.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="210" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="O01A" value="latest-all.json.bz2" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="340" y="350" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="O01B" value="bird_qids.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="520" y="350" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="O02" value="QID別entity JSON" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="660" y="270" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="O03" value="bird_ontology.pkl" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="980" y="270" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="O04G" value="bird_taxonomy_graph.pkl" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1320" y="700" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="O04L" value="surface_manifest.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1510" y="700" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="O04T" value="qid_taxon_labels.tsv/json/meta" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1700" y="700" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="O05" value="page*.json / API manifest" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1965" y="700" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="O06" value="recording_map.json" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="2160" y="700" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="O07" value="raw audio + existing manifest" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="2350" y="700" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="O08" value="audio embeddings + manifest + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="2600" y="570" width="210" height="55" as="geometry"/></mxCell>
+        <mxCell id="O09G" value="graph embeddings + qids + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="2920" y="430" width="210" height="55" as="geometry"/></mxCell>
+        <mxCell id="O09L" value="language embeddings + surface IDs + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="2920" y="500" width="230" height="55" as="geometry"/></mxCell>
+        <mxCell id="O10" value="selected run / representative mapping" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="3260" y="330" width="220" height="55" as="geometry"/></mxCell>
+        <mxCell id="O11C" value="common_qids.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="3600" y="490" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="O11R" value="qid_num_recordings.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="3600" y="520" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="O11Q" value="run_qid_counts.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="3600" y="580" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="O12A" value="Exp1 normal: npy / png / qids / summary" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="3900" y="20" width="220" height="55" as="geometry"/></mxCell>
+        <mxCell id="O12B" value="Exp1 ordered: heatmap / distribution" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="3900" y="570" width="220" height="55" as="geometry"/></mxCell>
+        <mxCell id="O12C" value="Exp2: 4 SVG + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="4240" y="20" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="O13A" value="Exp3 audio: per_query / summary / metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="4240" y="600" width="230" height="55" as="geometry"/></mxCell>
+        <mxCell id="O13B" value="Taxon probe per_query / summary / metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="4240" y="970" width="230" height="55" as="geometry"/></mxCell>
+        <mxCell id="O14" value="集約済みTaxon probe結果" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;" vertex="1" parent="1"><mxGeometry x="4580" y="620" width="190" height="55" as="geometry"/></mxCell>
+
+        <mxCell id="eW01" edge="1" parent="1" source="W00" target="O01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
+        <mxCell id="eW1A" edge="1" parent="1" source="W00" target="P01A" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="eW1B" edge="1" parent="1" source="W00" target="P01B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e01" edge="1" parent="1" source="O01" target="P01B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e1" edge="1" parent="1" source="P01A" target="O01A" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e3a" edge="1" parent="1" source="P01B" target="O01B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e1b" edge="1" parent="1" source="O01A" target="P02" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e2b" edge="1" parent="1" source="O01B" target="P02" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e3" edge="1" parent="1" source="P02" target="O02" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e4" edge="1" parent="1" source="P02" target="P03" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e5" edge="1" parent="1" source="P03" target="O03" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e6" edge="1" parent="1" source="P03" target="P04G" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e7" edge="1" parent="1" source="P03" target="P04L" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e8" edge="1" parent="1" source="P04G" target="P04TL" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e9" edge="1" parent="1" source="P04G" target="P04X" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e10" edge="1" parent="1" source="P04G" target="O04G" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e11" edge="1" parent="1" source="P04L" target="O04L" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e12" edge="1" parent="1" source="P04TL" target="O04T" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e13" edge="1" parent="1" source="P04X" target="P05" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e14" edge="1" parent="1" source="P05" target="O05" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e15" edge="1" parent="1" source="P05" target="P06" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e16" edge="1" parent="1" source="P06" target="O06" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e17" edge="1" parent="1" source="P06" target="P07" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e18" edge="1" parent="1" source="P07" target="O07" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e19" edge="1" parent="1" source="P07" target="P08W" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e20" edge="1" parent="1" source="P07" target="P08B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e21" edge="1" parent="1" source="P07" target="P08P" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e22" edge="1" parent="1" source="P08W" target="O08" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e23" edge="1" parent="1" source="P08B" target="O08" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e24" edge="1" parent="1" source="P08P" target="O08" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e25" edge="1" parent="1" source="P04G" target="P09G" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e26" edge="1" parent="1" source="P04L" target="P09L" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e27" edge="1" parent="1" source="P09G" target="O09G" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e28" edge="1" parent="1" source="P09L" target="O09L" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e29" edge="1" parent="1" source="O08" target="P10" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e30" edge="1" parent="1" source="O09G" target="P10" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e31" edge="1" parent="1" source="O09L" target="P10" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e32" edge="1" parent="1" source="P10" target="O10" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e33" edge="1" parent="1" source="P10" target="P11C" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e34" edge="1" parent="1" source="P10" target="P11Q" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e35" edge="1" parent="1" source="P05" target="P11R" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e36" edge="1" parent="1" source="P11C" target="O11C" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e37" edge="1" parent="1" source="P11R" target="O11R" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e38" edge="1" parent="1" source="P11Q" target="O11Q" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e39" edge="1" parent="1" source="P10" target="P12A" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e40" edge="1" parent="1" source="P10" target="P12B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e41" edge="1" parent="1" source="P11C" target="P12B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e42" edge="1" parent="1" source="P11R" target="P12B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e43" edge="1" parent="1" source="P10" target="P12C" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e44" edge="1" parent="1" source="P11C" target="P12C" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e45" edge="1" parent="1" source="P11R" target="P12C" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e46" edge="1" parent="1" source="P04G" target="P12C" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e47" edge="1" parent="1" source="P12A" target="O12A" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e48" edge="1" parent="1" source="P12B" target="O12B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e49" edge="1" parent="1" source="P12C" target="O12C" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e50" edge="1" parent="1" source="P10" target="P13A" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e51" edge="1" parent="1" source="P04TL" target="P13B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e52" edge="1" parent="1" source="P10" target="P13B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e53" edge="1" parent="1" source="P13A" target="O13A" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e54" edge="1" parent="1" source="P13B" target="O13B" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e55" edge="1" parent="1" source="P13B" target="P14" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e56" edge="1" parent="1" source="P14" target="O14" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e57" edge="1" parent="1" source="P12A" target="P15" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e58" edge="1" parent="1" source="P12B" target="P15" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e59" edge="1" parent="1" source="P12C" target="P15" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e60" edge="1" parent="1" source="P13A" target="P15" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+        <mxCell id="e61" edge="1" parent="1" source="P14" target="P15" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
