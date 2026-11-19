@@ -1,256 +1,691 @@
-<mxfile host="app.diagrams.net" modified="2026-11-16T09:56:56.000Z" agent="Codex" version="24.7.17" type="device">
+<mxfile host="app.diagrams.net" agent="Codex">
   <diagram id="command-workflow" name="研究処理フローチャート（コマンド単位）">
-    <mxGraphModel dx="1800" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0"><root>
-      <mxCell id="0"/><mxCell id="1" parent="0"/>
-      <mxCell id="C00" value="0 外部Wikidata検索&#xa;入力：外部検索定義&#xa;処理：Wikidata Query ServiceでQ5113下部の全ノードを検索&#xa;出力：data/raw/wikidata/query.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="20" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O00" value="data/raw/wikidata/query.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="45" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C00" edge="1" parent="1" source="C00" target="O00" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C01" value="1B make extract-qids&#xa;入力：query.tsv&#xa;処理：item URL→QID抽出・重複除去・Q5113補完&#xa;出力：data/interim/wikidata/bird_qids.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="175" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O01" value="data/interim/wikidata/bird_qids.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="200" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C01" edge="1" parent="1" source="C01" target="O01" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C02" value="1A make download-wikidata-dump&#xa;入力：Wikidata dump配布元&#xa;処理：対象QIDのentityを含むdumpを保存&#xa;出力：data/raw/wikidata/dumps/latest-all.json.bz2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="330" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O02" value="data/raw/wikidata/dumps/latest-all.json.bz2" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="355" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C02" edge="1" parent="1" source="C02" target="O02" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C03" value="2 make extract-dump-json&#xa;入力：bird_qids.tsv + latest-all.json.bz2&#xa;処理：対象QIDだけshard配置へ抽出、既存JSON再利用&#xa;出力：data/interim/wikidata/json/&lt;1桁目&gt;/&lt;2桁目&gt;/Qxxxx.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="485" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O03" value="data/interim/wikidata/json/&lt;1桁目&gt;/&lt;2桁目&gt;/Qxxxx.json" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="510" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C03" edge="1" parent="1" source="C03" target="O03" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C04" value="3 make build-ontology&#xa;入力：QID別entity JSON&#xa;処理：entityをontologyレコードへ変換&#xa;出力：data/processed/bird_ontology.pkl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="640" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O04" value="data/processed/bird_ontology.pkl" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="665" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C04" edge="1" parent="1" source="C04" target="O04" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C05" value="4A make build-graph&#xa;入力：bird_ontology.pkl&#xa;処理：QIDノード、parent_taxon→child有向辺、未知親placeholder&#xa;出力：data/processed/graph/bird_taxonomy_graph.pkl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="795" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O05" value="data/processed/graph/bird_taxonomy_graph.pkl" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="820" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C05" edge="1" parent="1" source="C05" target="O05" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C06" value="4D make build-taxon-labels&#xa;入力：taxonomy graph&#xa;処理：親方向の最近傍order/family祖先labelを割当&#xa;出力：data/processed/taxonomy/qid_taxon_labels.tsv + .json + meta.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="950" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O06" value="data/processed/taxonomy/qid_taxon_labels.tsv + .json + meta.json" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="975" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C06" edge="1" parent="1" source="C06" target="O06" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C07" value="4C make extract-xeno-canto-ids&#xa;入力：ontology + taxonomy graph&#xa;処理：species IDを持つ末端QIDを抽出&#xa;出力：data/interim/wikidata/bird_xeno_canto_ids.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="1105" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O07" value="data/interim/wikidata/bird_xeno_canto_ids.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="1130" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C07" edge="1" parent="1" source="C07" target="O07" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C08" value="5 make fetch-xeno-canto-recording-json&#xa;入力：bird_xeno_canto_ids.tsv + API key&#xa;処理：sp/q:A、page=1、per_page=20、since=2025-05-01で取得&#xa;出力：data/interim/xeno-canto/api_recordings/&lt;QID&gt;/page*.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="1260" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O08" value="data/interim/xeno-canto/api_recordings/&lt;QID&gt;/page*.json" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="1285" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C08" edge="1" parent="1" source="C08" target="O08" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C09" value="6 make extract-xeno-canto-recording-ids&#xa;入力：API page JSON&#xa;処理：ページ順にrecording IDを抽出・重複除去&#xa;出力：data/interim/xeno-canto/recording_map.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="1415" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O09" value="data/interim/xeno-canto/recording_map.json" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="1440" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C09" edge="1" parent="1" source="C09" target="O09" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C10" value="7 make fetch-xeno-canto-audio&#xa;入力：recording_map.json + recording URL&#xa;処理：品質A、QIDごと最大20件、失敗補充なし、15秒切出し&#xa;出力：data/raw/xeno-canto/&lt;QID&gt;/&lt;recording_id&gt;.&lt;ext&gt; + manifest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="1570" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O10" value="data/raw/xeno-canto/&lt;QID&gt;/&lt;recording_id&gt;.&lt;ext&gt; + manifest" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="1595" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C10" edge="1" parent="1" source="C10" target="O10" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C11" value="8W make build-audio-embeddings-wav2vec2&#xa;入力：raw audio&#xa;処理：wav2vec2-base-960h、16kHz、ファイル全体、時間平均&#xa;出力：data/external/embeddings/audio/wav2vec2/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="1725" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O11" value="data/external/embeddings/audio/wav2vec2/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="1750" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C11" edge="1" parent="1" source="C11" target="O11" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C12" value="8B make build-audio-embeddings-birdnet-gpu&#xa;入力：raw audio&#xa;処理：BirdNET acoustic 2.4、pb、48kHz、3秒窓&#xa;出力：data/external/embeddings/audio/birdnet/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="1880" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O12" value="data/external/embeddings/audio/birdnet/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="1905" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C12" edge="1" parent="1" source="C12" target="O12" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C13" value="8P make build-audio-embeddings-perch&#xa;入力：raw audio（別環境）&#xa;処理：旧公式Perch、32kHz、5秒窓、内部集約は未確認&#xa;出力：data/external/embeddings/audio/perch/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="2035" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O13" value="data/external/embeddings/audio/perch/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="2060" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C13" edge="1" parent="1" source="C13" target="O13" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C14" value="4B make build-language-surface-manifest&#xa;入力：bird_ontology.pkl&#xa;処理：en_name/enwiki_title、ja_name/jawiki_titleから空・重複除去、ordinal付与&#xa;出力：data/processed/language/&lt;en|ja&gt;/surface_manifest.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="2190" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O14" value="data/processed/language/&lt;en|ja&gt;/surface_manifest.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="2215" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C14" edge="1" parent="1" source="C14" target="O14" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C15" value="9B make build-language-embeddings&#xa;入力：surface_manifest.tsv&#xa;処理：英日BERT、max_length=32、padding/truncation、attention mask mean pooling&#xa;出力：data/external/embeddings/language/&lt;en|ja&gt;/&lt;run&gt;/embeddings.npy + IDs + metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="2345" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O15" value="data/external/embeddings/language/&lt;en|ja&gt;/&lt;run&gt;/embeddings.npy + IDs + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="2370" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C15" edge="1" parent="1" source="C15" target="O15" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C16" value="9A-GCN make build-gcn-embeddings&#xa;入力：taxonomy graph&#xa;処理：hidden32/output128/layers2/epochs200/negative20/initial embedding&#xa;出力：data/external/embeddings/graph/gcn/&lt;run&gt;/embeddings.npy + qids + metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="2500" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O16" value="data/external/embeddings/graph/gcn/&lt;run&gt;/embeddings.npy + qids + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="2525" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C16" edge="1" parent="1" source="C16" target="O16" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C17" value="9A-GraphSAGE make build-graphsage-embeddings&#xa;入力：taxonomy graph&#xa;処理：hidden32/output128/layers2/neighbors25,10/negative1/device cuda&#xa;出力：data/external/embeddings/graph/graphsage/&lt;run&gt;/embeddings.npy + qids + metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="2655" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O17" value="data/external/embeddings/graph/graphsage/&lt;run&gt;/embeddings.npy + qids + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="2680" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C17" edge="1" parent="1" source="C17" target="O17" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C18" value="9A-GRACE make build-grace-embeddings&#xa;入力：taxonomy graph&#xa;処理：GCN encoder、hidden32/output128/projection128、edge drop .2/.4&#xa;出力：data/external/embeddings/graph/grace/&lt;run&gt;/embeddings.npy + qids + metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="2810" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O18" value="data/external/embeddings/graph/grace/&lt;run&gt;/embeddings.npy + qids + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="2835" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C18" edge="1" parent="1" source="C18" target="O18" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C19" value="9A-Node2Vec make build-node2vec-embeddings&#xa;入力：taxonomy graph&#xa;処理：output128、walk40、walks10、window10、negative5、batch8192&#xa;出力：data/external/embeddings/graph/node2vec/&lt;run&gt;/embeddings.npy + qids + metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="2965" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O19" value="data/external/embeddings/graph/node2vec/&lt;run&gt;/embeddings.npy + qids + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="2990" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C19" edge="1" parent="1" source="C19" target="O19" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C20" value="9A-TransE make build-transe-embeddings&#xa;入力：taxonomy graph&#xa;処理：output128、epochs200、margin1、p_norm1、relation parent_taxon&#xa;出力：data/external/embeddings/graph/transe/&lt;run&gt;/embeddings.npy + qids + metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="3120" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O20" value="data/external/embeddings/graph/transe/&lt;run&gt;/embeddings.npy + qids + metadata" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="3145" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C20" edge="1" parent="1" source="C20" target="O20" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C21" value="10 selected_runs固定&#xa;入力：各埋込みrun&#xa;処理：selected_runs.jsonのlabel/pathを更新・確認&#xa;出力：data/external/embeddings/selected_runs.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="3275" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O21" value="data/external/embeddings/selected_runs.json" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="3300" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C21" edge="1" parent="1" source="C21" target="O21" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C22" value="11C/11Q make report-qid-coverage&#xa;入力：selected runs&#xa;処理：QID交差、qid_count、complete_qid_countを集計&#xa;出力：experiments/exp1/common_qids.tsv + run_qid_counts.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="3430" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O22" value="experiments/exp1/common_qids.tsv + run_qid_counts.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="3455" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C22" edge="1" parent="1" source="C22" target="O22" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C23" value="11R make collect-xeno-canto-num-recordings&#xa;入力：API page001 JSON&#xa;処理：API numRecordingsをQID単位で収集&#xa;出力：experiments/exp1/qid_num_recordings.tsv" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="3585" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O23" value="experiments/exp1/qid_num_recordings.tsv" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="3610" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C23" edge="1" parent="1" source="C23" target="O23" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C24" value="12A make run-exp1-simmatrix&#xa;入力：selected/complete runs&#xa;処理：共通QID、QID順、L2 cosine行列、audio窓平均&#xa;出力：experiments/exp1/&lt;run&gt;/{similarity.npy,heatmap.png,distribution.png,matrix_qids.json,metadata}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="3740" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O24" value="experiments/exp1/&lt;run&gt;/{similarity.npy,heatmap.png,distribution.png,matrix_qids.json,metadata}" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="3765" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C24" edge="1" parent="1" source="C24" target="O24" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C25" value="12B make run-exp1-simmatrix-ordered&#xa;入力：runs + common_qids + num_recordings&#xa;処理：録音数降順・QID昇順で上位100件、欠落run除外&#xa;出力：experiments/exp1_ordered/&lt;run&gt;/{heatmap.png,distribution.png}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="3895" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O25" value="experiments/exp1_ordered/&lt;run&gt;/{heatmap.png,distribution.png}" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="3920" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C25" edge="1" parent="1" source="C25" target="O25" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C26" value="12C make run-exp2-integrated-graph&#xa;入力：G/L/A runs + common_qids + num_recordings + graph&#xa;処理：各modality p95辺選択、union weight=max、layout共有&#xa;出力：experiments/exp2/&lt;run-combination&gt;/{graph,language,audio,integrated}.svg + metadata.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="4050" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O26" value="experiments/exp2/&lt;run-combination&gt;/{graph,language,audio,integrated}.svg + metadata.json" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="4075" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C26" edge="1" parent="1" source="C26" target="O26" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C27" value="13A make run-exp3-sub1-audio&#xa;入力：audio run&#xa;処理：窓を録音平均、同QID別録音を正解、cosine順位評価&#xa;出力：experiments/exp3/sub1_audio/&lt;run&gt;/{per_query.tsv,summary.tsv,metadata.json}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="4205" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O27" value="experiments/exp3/sub1_audio/&lt;run&gt;/{per_query.tsv,summary.tsv,metadata.json}" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="4230" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C27" edge="1" parent="1" source="C27" target="O27" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C28" value="13B make run-exp3-search&#xa;入力：taxon labels + selected G/L/A&#xa;処理：rank別label、G/L/A連結、pattern別top_k=10評価&#xa;出力：experiments/exp3/taxon_probe/&lt;pattern&gt;/&lt;rank&gt;/&lt;run&gt;/{per_query.tsv,summary.tsv,metadata.json}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="4360" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O28" value="experiments/exp3/taxon_probe/&lt;pattern&gt;/&lt;rank&gt;/&lt;run&gt;/{per_query.tsv,summary.tsv,metadata.json}" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="4385" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C28" edge="1" parent="1" source="C28" target="O28" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C29" value="14 Taxon probe結果集約&#xa;入力：C28の結果&#xa;処理：rank・pattern・run組合せを保って集約&#xa;出力：experiments/exp3/taxon_probe/以下の集約結果" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="4515" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O29" value="experiments/exp3/taxon_probe/以下の集約結果" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="4540" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C29" edge="1" parent="1" source="C29" target="O29" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="C30" value="15 再現用成果物固定&#xa;入力：C01〜C29の入出力&#xa;処理：本体・行対応・run・QID・label・代表値を一組で保管&#xa;出力：再現用成果物一式" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="4670" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="O30" value="再現用成果物一式" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" vertex="1" parent="1"><mxGeometry x="390" y="4695" width="310" height="75" as="geometry"/></mxCell>
-      <mxCell id="out_C30" edge="1" parent="1" source="C30" target="O30" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;"/>
-      <mxCell id="d0" edge="1" parent="1" source="C00" target="C01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d1" edge="1" parent="1" source="C00" target="C02" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d2" edge="1" parent="1" source="C01" target="C03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d3" edge="1" parent="1" source="C02" target="C03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d4" edge="1" parent="1" source="C03" target="C04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d5" edge="1" parent="1" source="C04" target="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d6" edge="1" parent="1" source="C04" target="C07" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d7" edge="1" parent="1" source="C05" target="C06" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d8" edge="1" parent="1" source="C05" target="C07" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d9" edge="1" parent="1" source="C07" target="C08" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d10" edge="1" parent="1" source="C08" target="C09" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d11" edge="1" parent="1" source="C09" target="C10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d12" edge="1" parent="1" source="C10" target="C11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d13" edge="1" parent="1" source="C10" target="C12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d14" edge="1" parent="1" source="C10" target="C13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d15" edge="1" parent="1" source="C04" target="C14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d16" edge="1" parent="1" source="C14" target="C15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d17" edge="1" parent="1" source="C05" target="C16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d18" edge="1" parent="1" source="C05" target="C17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d19" edge="1" parent="1" source="C05" target="C18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d20" edge="1" parent="1" source="C05" target="C19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d21" edge="1" parent="1" source="C05" target="C20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d22" edge="1" parent="1" source="C11" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d23" edge="1" parent="1" source="C12" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d24" edge="1" parent="1" source="C13" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d25" edge="1" parent="1" source="C15" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d26" edge="1" parent="1" source="C16" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d27" edge="1" parent="1" source="C17" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d28" edge="1" parent="1" source="C18" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d29" edge="1" parent="1" source="C19" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d30" edge="1" parent="1" source="C20" target="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d31" edge="1" parent="1" source="C21" target="C22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d32" edge="1" parent="1" source="C21" target="C24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d33" edge="1" parent="1" source="C21" target="C25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d34" edge="1" parent="1" source="C21" target="C26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d35" edge="1" parent="1" source="C21" target="C27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d36" edge="1" parent="1" source="C21" target="C28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d37" edge="1" parent="1" source="C23" target="C25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d38" edge="1" parent="1" source="C23" target="C26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d39" edge="1" parent="1" source="C22" target="C25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d40" edge="1" parent="1" source="C22" target="C26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d41" edge="1" parent="1" source="C05" target="C26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d42" edge="1" parent="1" source="C06" target="C28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d43" edge="1" parent="1" source="C28" target="C29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d44" edge="1" parent="1" source="C24" target="C30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d45" edge="1" parent="1" source="C25" target="C30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d46" edge="1" parent="1" source="C26" target="C30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d47" edge="1" parent="1" source="C27" target="C30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="d48" edge="1" parent="1" source="C29" target="C30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;"/>
-      <mxCell id="S01" value="詳細：QIDリスト&#xa;query.tsvは外部検索結果。再検索せず、bird_qids.tsvがdump抽出対象を固定する。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="20" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge0" edge="1" parent="1" source="C01" target="S01" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S02" value="詳細：ontology→graph&#xa;ontology 1レコード=graph 1ノード。parent_taxonは親→子の有向辺。未知親はplaceholder。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="175" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge1" edge="1" parent="1" source="C05" target="S02" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S03" value="詳細：surfaceと行対応&#xa;surface_manifest 1行=embeddings 1行。surface_id/qid/ordinalで表層形を追跡する。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="330" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge2" edge="1" parent="1" source="C14" target="S03" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S04" value="詳細：Taxon label&#xa;対象自身を除きparent方向の最近傍祖先。13Bの正解ラベルに使い、学習入力にはしない。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="485" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge3" edge="1" parent="1" source="C06" target="S04" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S05" value="詳細：API録音とlocal audio&#xa;numRecordingsはAPI件数、recording_mapはID列、raw audioは取得成功ファイル。値を混同しない。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="640" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge4" edge="1" parent="1" source="C08" target="S05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S06" value="詳細：音声の粒度&#xa;audio_manifest 1行=窓。同じ(QID,relative_path)を平均し、実験では録音/QID単位へ集約する。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="795" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge5" edge="1" parent="1" source="C11" target="S06" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S07" value="詳細：graph行対応&#xa;全graph手法でqids[i]とembeddings[i]を固定。initial embeddingは学習可能表現で固定one-hotではない。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="950" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge6" edge="1" parent="1" source="C16" target="S07" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S08" value="詳細：graph手法&#xa;GCN/SAGE/GRACEは伝播、Node2Vecはwalk/window、TransEはparent_taxon三つ組。metadata/traceで条件確認。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="1105" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge7" edge="1" parent="1" source="C19" target="S08" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S09" value="詳細：言語集約&#xa;max32 token、padding mask付きmean pooling。特殊token別除外とprojectionはない。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="1260" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge8" edge="1" parent="1" source="C15" target="S09" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S10" value="詳細：run&#xa;runは1回の埋込み生成ディレクトリ。selected_runs.jsonが手法/モデルごとのpathを固定する。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="1415" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge9" edge="1" parent="1" source="C21" target="S10" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S11" value="詳細：共通QID&#xa;common_qidsは集合交差。complete_qid_countはrunと他modality共通集合の交差件数。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="1570" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge10" edge="1" parent="1" source="C22" target="S11" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S12" value="詳細：similarity matrix&#xa;同じQID順でL2正規化後の内積。12Bだけ録音数順上位100件へ制限する。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="1725" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge11" edge="1" parent="1" source="C24" target="S12" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S13" value="詳細：統合graph&#xa;各modalityの対角除外p95以上を辺にし、同一pairをunion。union_thresholdは再選別しない。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="1880" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge12" edge="1" parent="1" source="C26" target="S13" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S14" value="詳細：音声検索&#xa;query/候補は録音単位。同QID別録音のみ正解。正解0 queryは平均から除外する。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="2035" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge13" edge="1" parent="1" source="C27" target="S14" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S15" value="詳細：Taxon probe&#xa;QID単位のG/L/A連結。自己除外、同label正解、分割なし。14でrank/pattern別集約。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="2190" width="300" height="105" as="geometry"/></mxCell>
-      <mxCell id="sedge14" edge="1" parent="1" source="C28" target="S15" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S16" value="詳細：graph入力と辺&#xa;parent_taxonを親→子の有向辺、undirected=false。GCN/SAGE/GRACEは学習可能initial embedding＋自己ループで伝播。placeholderの扱いはqids/metadataで確認。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="20" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge15" edge="1" parent="1" source="C16" target="S16" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S17" value="詳細：GCN/SAGE/GRACE学習&#xa;GCNはGAE negative sampling、SAGEはmean＋近傍[25,10]、GRACEはedge drop 2視点のin-batch contrastive loss。GRACE保存はencoder出力。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="165" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge16" edge="1" parent="1" source="C18" target="S17" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S18" value="詳細：Node2Vec/TransE&#xa;Node2Vecは有向walk、p=q=1、window学習、行き止まりで終了。TransEはparent_taxonの(h,r,t)にhead/tail corruptionとmargin lossを適用。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="310" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge17" edge="1" parent="1" source="C19" target="S18" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S19" value="詳細：graph出力対応&#xa;embeddings.npy[i]↔qids.json[i]。training_trace等は条件確認用。L2正規化は実験側のcosine計算時に行う。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="455" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge18" edge="1" parent="1" source="C20" target="S19" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S20" value="詳細：音声埋込み行&#xa;wav2vec2=16kHz・全体・時間平均、BirdNET=48kHz・3秒窓・pb。Perch=別環境・32kHz相当・5秒窓、内部checkpoint/集約は未確認。manifest行がembeddings行に対応。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="600" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge19" edge="1" parent="1" source="C11" target="S20" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S21" value="詳細：Taxon label探索&#xa;parent_taxonを上方向へ辿る最近傍order/family祖先をlabel_qidにする。label_name/distanceを出力。親欠損・循環・該当なしは空欄。複数親は推測選択しない。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="745" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge20" edge="1" parent="1" source="C06" target="S21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S22" value="詳細：代表値とrun探索&#xa;言語は(qid,ordinal,surface_id,text)先頭。音声は(QID,path)窓平均後、共通pathから代表を選ぶ。selected_runs優先、autoは必要ファイル完了run。13Bはselectedのみ。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="890" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge21" edge="1" parent="1" source="C21" target="S22" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S23" value="詳細：共通集合と録音数&#xa;complete_qid_countはrunと他modality共通集合の交差件数。12Bは録音数表にないQIDを除外、12Cは0扱い。numRecordingsはAPI値でlocal file数ではない。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="1035" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge22" edge="1" parent="1" source="C22" target="S23" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S24" value="詳細：Experiment 1計算&#xa;行L2正規化後S=XX^T、対角=1.0。12AはQID昇順全件、12Bは(-numRecordings,QID)上位100。12Aはnpy/ID等、12Bはheatmap/distributionを出力。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="1180" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge23" edge="1" parent="1" source="C24" target="S24" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S25" value="詳細：Experiment 2閾値/描画&#xa;対角除外上三角のp95（NumPy線形補間）、score以上を辺にする。union weight=max、union_thresholdは再選別せず記録。全QID/孤立ノードを描画しspring_layout(seed=42,k=.85,iterations=200)を共有。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="1325" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge24" edge="1" parent="1" source="C26" target="S25" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S26" value="詳細：13A評価&#xa;録音単位で同path自身を除外、同QID別録音を正解。AP=全候補順位のprecision合計/全relevant数、MRR=最初の正解の逆数、nDCG@10/50/100。正解0 queryは平均から除外。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="1470" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge25" edge="1" parent="1" source="C27" target="S26" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S27" value="詳細：13B評価&#xa;P@k=正解/k、R@k=正解/全正解、F1=調和平均、AP@10=precision合計/全正解、RRはtop10内の最初の正解。正解0も平均含むがevaluated_query_countから除外。境界同点規則は未確認。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="1615" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge26" edge="1" parent="1" source="C28" target="S27" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="S28" value="詳細：再利用・固定境界&#xa;本体、行対応、selected_runs、対象QID、labels、代表値、metadataを一組で参照。既存/partial/failedの再利用条件は実装依存。日時・版・hash・依存環境が無ければ未確認/未記録。" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1"><mxGeometry x="1120" y="1760" width="330" height="125" as="geometry"/></mxCell>
-      <mxCell id="sedge27" edge="1" parent="1" source="C30" target="S28" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="C08M" value="8準備 make download-audio-models&#xa;処理：音声モデルcacheを事前取得&#xa;出力：data/external/models/audio/huggingface/等" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="2350" width="320" height="115" as="geometry"/></mxCell>
-      <mxCell id="C10R" value="7補修 make repair-xeno-canto-audio&#xa;処理：raw audioをdecode検査し修復reportを生成&#xa;出力：xeno_canto_audio_repair.tsv/json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="2505" width="320" height="115" as="geometry"/></mxCell>
-      <mxCell id="C10F" value="8F make finetune-wav2vec2-crossval&#xa;処理：raw audioで5-fold wav2vec2 fine-tune&#xa;出力：data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_0..4/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="2660" width="320" height="115" as="geometry"/></mxCell>
-      <mxCell id="C11F" value="8F make build-audio-embeddings-wav2vec2-finetuned&#xa;処理：foldモデルから音声埋込みを生成&#xa;出力：data/external/embeddings/audio/wav2vec2-finetuned/..." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="2815" width="320" height="115" as="geometry"/></mxCell>
-      <mxCell id="C22S" value="10確認 make inspect-multimodal-sources&#xa;処理：selected/auto-discover runとmetadataを検査&#xa;出力：診断標準出力" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="2970" width="320" height="115" as="geometry"/></mxCell>
-      <mxCell id="C22G" value="準備 make check-gpu / check-birdnet-gpu&#xa;処理：CUDA/TensorFlowのGPU認識を確認&#xa;出力：診断標準出力" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1"><mxGeometry x="760" y="3125" width="320" height="115" as="geometry"/></mxCell>
-      <mxCell id="optC08M" edge="1" parent="1" source="C08M" target="C11" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="optC10R" edge="1" parent="1" source="C10R" target="C10F" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="optC10F" edge="1" parent="1" source="C10F" target="C11F" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="optC11F" edge="1" parent="1" source="C11F" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;"/>
-      <mxCell id="io0" value="query.tsv" edge="1" parent="1" source="O00" target="C01" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io1" value="bird_qids.tsv" edge="1" parent="1" source="O01" target="C03" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io2" value="dump" edge="1" parent="1" source="O02" target="C03" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io3" value="entity JSON" edge="1" parent="1" source="O03" target="C04" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io4" value="ontology" edge="1" parent="1" source="O04" target="C05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io5" value="ontology/graph" edge="1" parent="1" source="O04" target="C07" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io6" value="ontology" edge="1" parent="1" source="O04" target="C14" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io7" value="graph" edge="1" parent="1" source="O05" target="C06" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io8" value="graph" edge="1" parent="1" source="O05" target="C07" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io9" value="graph" edge="1" parent="1" source="O05" target="C16" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io10" value="graph" edge="1" parent="1" source="O05" target="C17" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io11" value="graph" edge="1" parent="1" source="O05" target="C18" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io12" value="graph" edge="1" parent="1" source="O05" target="C19" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io13" value="graph" edge="1" parent="1" source="O05" target="C20" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io14" value="graph" edge="1" parent="1" source="O05" target="C26" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io15" value="labels" edge="1" parent="1" source="O06" target="C28" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io16" value="Xeno IDs" edge="1" parent="1" source="O07" target="C08" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io17" value="API JSON" edge="1" parent="1" source="O08" target="C09" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io18" value="recording map" edge="1" parent="1" source="O09" target="C10" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io19" value="raw audio" edge="1" parent="1" source="O10" target="C11" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io20" value="raw audio" edge="1" parent="1" source="O10" target="C12" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io21" value="raw audio" edge="1" parent="1" source="O10" target="C13" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io22" value="surface manifest" edge="1" parent="1" source="O14" target="C15" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io23" value="audio runs" edge="1" parent="1" source="O11" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io24" value="audio runs" edge="1" parent="1" source="O12" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io25" value="audio runs" edge="1" parent="1" source="O13" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io26" value="language runs" edge="1" parent="1" source="O15" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io27" value="graph runs" edge="1" parent="1" source="O16" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io28" value="graph runs" edge="1" parent="1" source="O17" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io29" value="graph runs" edge="1" parent="1" source="O18" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io30" value="graph runs" edge="1" parent="1" source="O19" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io31" value="graph runs" edge="1" parent="1" source="O20" target="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io32" value="selected runs" edge="1" parent="1" source="O21" target="C22" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io33" value="selected runs" edge="1" parent="1" source="O21" target="C24" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io34" value="selected runs" edge="1" parent="1" source="O21" target="C25" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io35" value="selected runs" edge="1" parent="1" source="O21" target="C26" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io36" value="selected runs" edge="1" parent="1" source="O21" target="C27" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io37" value="selected runs" edge="1" parent="1" source="O21" target="C28" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io38" value="coverage" edge="1" parent="1" source="O22" target="C25" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io39" value="coverage" edge="1" parent="1" source="O22" target="C26" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io40" value="recording counts" edge="1" parent="1" source="O23" target="C25" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io41" value="recording counts" edge="1" parent="1" source="O23" target="C26" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-      <mxCell id="io42" value="Taxon probe results" edge="1" parent="1" source="O28" target="C29" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;"/>
-    </root></mxGraphModel></diagram></mxfile>
+    <mxGraphModel dx="354492" dy="232451" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-6" edge="1" parent="1" source="C00" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C01">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C00" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="0 外部Wikidata検索&lt;br&gt;処理：「Wikidata Query Service」でQ5113（bird）&lt;br&gt;下流の全ノードを検索&lt;br&gt;出力：data/raw/wikidata/query.tsv" vertex="1">
+          <mxGeometry height="125" width="330" x="20" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="O00" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/raw/wikidata/query.tsv" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="-465" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C00" edge="1" parent="1" source="C00" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O00" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-8" edge="1" parent="1" source="C01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C03">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C01" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="1B make extract-qids&#xa;入力：query.tsv&#xa;処理：item URL→QID抽出・重複除去・Q5113補完&#xa;出力：data/interim/wikidata/bird_qids.tsv" vertex="1">
+          <mxGeometry height="125" width="330" x="20" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="O01" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/interim/wikidata/bird_qids.tsv" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="-310" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C01" edge="1" parent="1" source="C01" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O01" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-7" edge="1" parent="1" source="C02" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C03">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C02" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="1A make download-wikidata-dump&lt;br&gt;入力：Wikidata dump配布元&lt;br&gt;処理：dumpを保存（対象QIDのentityを含む）&lt;br&gt;出力：data/raw/wikidata/dumps/latest-all.json.bz2" vertex="1">
+          <mxGeometry height="125" width="330" x="-340" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="O02" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/raw/wikidata/dumps/latest-all.json.bz2" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="-155" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C02" edge="1" parent="1" source="C02" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O02" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-9" edge="1" parent="1" source="C03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C04">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C03" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="2 make extract-dump-json&lt;br&gt;入力：bird_qids.tsv + latest-all.json.bz2&lt;br&gt;処理：latest-all.json.bz2からbird_qids.tsv&amp;nbsp;に含まれる対象QIDのみsharedディレクトリの配下へQID別entity JSONとして出力&lt;br&gt;出力：data/interim/wikidata/json/&amp;lt;1桁目&amp;gt;/&amp;lt;2桁目&amp;gt;/Qxxxx.json" vertex="1">
+          <mxGeometry height="125" width="330" x="-150" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="O03" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/interim/wikidata/json/&lt;1桁目&gt;/&lt;2桁目&gt;/Qxxxx.json" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C03" edge="1" parent="1" source="C03" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O03" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-15" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.453;entryY=-0.011;entryDx=0;entryDy=0;entryPerimeter=0;">
+          <mxGeometry relative="1" x="-0.1425" as="geometry">
+            <mxPoint x="20" y="700" as="sourcePoint" />
+            <mxPoint x="-191.5100000000093" y="973.6249999999927" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-30" edge="1" parent="1" source="C04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-34" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C16">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="350" y="870" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="C04" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="3 make build-ontology&#xa;入力：QID別entity JSON&#xa;処理：entityをontologyレコードへ変換&#xa;出力：data/processed/bird_ontology.pkl" vertex="1">
+          <mxGeometry height="90" width="330" x="21" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="O04" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/processed/bird_ontology.pkl" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="155" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C04" edge="1" parent="1" source="C04" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O04" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-12" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C06">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-17" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="-190" y="950" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="C05" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="4A make build-graph&lt;br&gt;入力：bird_ontology.pkl&lt;br&gt;処理：属性名parent_taxonとchild間の関係からQIDをノードとした有向グラフを構築．（親が未知の場合は空白ノード：placeholderとする）&lt;br&gt;出力：data/processed/graph/bird_taxonomy_graph.pkl" vertex="1">
+          <mxGeometry height="125" width="330" x="20" y="795" as="geometry" />
+        </mxCell>
+        <mxCell id="O05" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/processed/graph/bird_taxonomy_graph.pkl" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="310" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C05" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O05" />
+        <mxCell id="C06" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="4D make build-taxon-labels&lt;br&gt;入力：bird_taxonomy_graph.pkl&lt;br&gt;処理：各ノードの空欄のorderおよびfamilyに，直近の祖先のノードのorderおよびfamilyのlabelを割当&lt;br&gt;出力：data/processed/taxonomy/qid_taxon_labels.tsv + .json + meta.json" vertex="1">
+          <mxGeometry height="125" width="330" x="230" y="1230" as="geometry" />
+        </mxCell>
+        <mxCell id="O06" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/processed/taxonomy/qid_taxon_labels.tsv + .json + meta.json" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C06" edge="1" parent="1" source="C06" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O06" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-18" edge="1" parent="1" source="C07" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C08">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C07" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="4C make extract-xeno-canto-ids&lt;br&gt;入力：bird_ontology.pkl + bird_taxonomy_graph.pkl&lt;br&gt;処理：species IDを持つ葉ノードのQIDを抽出&lt;br&gt;出力：data/interim/wikidata/bird_xeno_canto_ids.tsv" vertex="1">
+          <mxGeometry height="125" width="330" x="-340" y="950" as="geometry" />
+        </mxCell>
+        <mxCell id="O07" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/interim/wikidata/bird_xeno_canto_ids.tsv" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C07" edge="1" parent="1" source="C07" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O07" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-20" edge="1" parent="1" source="C08" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C09">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-41" edge="1" parent="1" source="C08" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C08" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="5 make fetch-xeno-canto-recording-json&lt;br&gt;入力：bird_xeno_canto_ids.tsv + API key&lt;br&gt;処理：sp/q:A、page=1、per_page=20、since=2025-05-01で取得&lt;br&gt;出力：data/interim/xeno-canto/api_recordings//page*.json&lt;br&gt;（API page JSON）" vertex="1">
+          <mxGeometry height="125" width="330" x="-340" y="1140" as="geometry" />
+        </mxCell>
+        <mxCell id="O08" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/interim/xeno-canto/api_recordings/&lt;QID&gt;/page*.json" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="775" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C08" edge="1" parent="1" source="C08" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O08" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-21" edge="1" parent="1" source="C09" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C09" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="6 make extract-xeno-canto-recording-ids&#xa;入力：API page JSON&#xa;処理：ページ順にrecording IDを抽出・重複除去&#xa;出力：data/interim/xeno-canto/recording_map.json" vertex="1">
+          <mxGeometry height="125" width="330" x="-340" y="1315" as="geometry" />
+        </mxCell>
+        <mxCell id="O09" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/interim/xeno-canto/recording_map.json" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C09" edge="1" parent="1" source="C09" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O09" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-23" edge="1" parent="1" source="C10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-25" edge="1" parent="1" source="C10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-26" edge="1" parent="1" source="C10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="7 make fetch-xeno-canto-audio&lt;br&gt;入力：recording_map.json + recording URL&lt;br&gt;処理：API page JSONから音声の品質がAのrecording URLを抽出．QIDごとに最大抽出件数は20件．recording URL先に音声ファイルがない場合は空とする．音声は冒頭から15秒までを切出す&lt;br&gt;出力：data/raw/xeno-canto//. + manifest&lt;br&gt;（xeno-cantoディレクトリ下の音声ファイルをraw audioとする）" vertex="1">
+          <mxGeometry height="125" width="330" x="21" y="1510" as="geometry" />
+        </mxCell>
+        <mxCell id="O10" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/raw/xeno-canto/&lt;QID&gt;/&lt;recording_id&gt;.&lt;ext&gt; + manifest" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="1085" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C10" edge="1" parent="1" source="C10" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O10" />
+        <mxCell id="C11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="8W make build-audio-embeddings-wav2vec2&lt;br&gt;入力：raw audio&lt;br&gt;処理：wav2vec2-base-960hによる埋め込み作成．設定は16kHzで各wavファイル全体を処理し，&lt;br&gt;時間フレーム方向で平均したベクトルを出力&lt;br&gt;出力：data/external/embeddings/audio/wav2vec2///embeddings.npy + manifest" vertex="1">
+          <mxGeometry height="125" width="330" x="-400" y="1715" as="geometry" />
+        </mxCell>
+        <mxCell id="O11" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/audio/wav2vec2/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="1240" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C11" edge="1" parent="1" source="C11" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O11" />
+        <mxCell id="C12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="8B make build-audio-embeddings-birdnet-gpu&lt;br&gt;入力：raw audio&lt;br&gt;処理：BirdNET acoustic 2.4によるによる埋め込み作成．設定は&lt;span style=&quot;background-color: transparent; color: light-dark(#000000, var(--ge-light-color, #ffffff));&quot;&gt;pb，48kHz，windowサイズは&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(#000000, var(--ge-light-color, #ffffff));&quot;&gt;3秒，&lt;br&gt;&lt;/span&gt;時間フレーム方向で平均したベクトルを出力&lt;div&gt;&lt;div&gt;出力：data/external/embeddings/audio/birdnet///embeddings.npy + manifest&lt;/div&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="125" width="330" x="20" y="1715" as="geometry" />
+        </mxCell>
+        <mxCell id="O12" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/audio/birdnet/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="1395" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C12" edge="1" parent="1" source="C12" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O12" />
+        <mxCell id="C13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="8P make build-audio-embeddings-perch&lt;br&gt;入力：raw audio&lt;br&gt;処理：Perch（1.0）による埋め込み作成，設定は32kHz，windowサイズ5秒，内部集約は未確認&lt;br&gt;出力：data/external/embeddings/audio/perch///embeddings.npy + manifest" vertex="1">
+          <mxGeometry height="125" width="330" x="440" y="1715" as="geometry" />
+        </mxCell>
+        <mxCell id="O13" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/audio/perch/&lt;model&gt;/&lt;run&gt;/embeddings.npy + manifest" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="1550" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C13" edge="1" parent="1" source="C13" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O13" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-31" edge="1" parent="1" source="C14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C14" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="4B make build-language-surface-manifest&lt;br&gt;入力：bird_ontology.pkl&lt;br&gt;処理：各QIDごとにen_name，enwiki_title，ja_name，jawiki_titleが空・重複であるものを除去．&lt;br&gt;en/jaの言語ごとに代表文字列を意味するordinalを付与&lt;br&gt;出力：data/processed/language//surface_manifest.tsv" vertex="1">
+          <mxGeometry height="110" width="330" x="-960" y="1470" as="geometry" />
+        </mxCell>
+        <mxCell id="O14" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/processed/language/&lt;en|ja&gt;/surface_manifest.tsv" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="1705" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C14" edge="1" parent="1" source="C14" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O14" />
+        <mxCell id="C15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="9B make build-language-embeddings&lt;br&gt;入力：surface_manifest.tsv&lt;br&gt;処理：英日BERTを使って埋め込みを作成&lt;br&gt;設定はmax_length=32、padding/truncation、attention mask mean pooling&lt;br&gt;出力：data/external/embeddings/language///embeddings.npy + IDs + metadata" vertex="1">
+          <mxGeometry height="125" width="330" x="-960" y="1710" as="geometry" />
+        </mxCell>
+        <mxCell id="O15" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/language/&lt;en|ja&gt;/&lt;run&gt;/embeddings.npy + IDs + metadata" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="1860" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C15" edge="1" parent="1" source="C15" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O15" />
+        <mxCell id="C16" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="9 make build-〈手法名〉-embeddings&lt;br&gt;入力：bird_taxonomy_graph.pkl&lt;br&gt;処理：音声埋め込みの作成．設定はhttps://app.notion.com/p/parameters-memo-369ff4d96c5a801e8ec9dfe01442d90e?source=copy_linkを参照&lt;br&gt;&lt;br&gt;&lt;div&gt;出力：data/external/embeddings/graph/〈手法名〉/〈実行日付〉/embeddings.npy + qids + metadata&lt;br&gt;&lt;br&gt;ただし〈&lt;span style=&quot;background-color: transparent; color: light-dark(#000000, var(--ge-light-color, #ffffff));&quot;&gt;手法名〉はgcn，graphsage，grace，node2vec，transe&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="165" width="420" x="900" y="1695" as="geometry" />
+        </mxCell>
+        <mxCell id="O16" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/graph/gcn/&lt;run&gt;/embeddings.npy + qids + metadata" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="2015" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C16" edge="1" parent="1" source="C16" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O16" />
+        <mxCell id="O17" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/graph/graphsage/&lt;run&gt;/embeddings.npy + qids + metadata" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="2170" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C17" edge="1" parent="1" source="C17" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O17" />
+        <mxCell id="O18" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/graph/grace/&lt;run&gt;/embeddings.npy + qids + metadata" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="2325" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C18" edge="1" parent="1" source="C18" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O18" />
+        <mxCell id="O19" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/graph/node2vec/&lt;run&gt;/embeddings.npy + qids + metadata" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="2480" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C19" edge="1" parent="1" source="C19" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O19" />
+        <mxCell id="O20" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/graph/transe/&lt;run&gt;/embeddings.npy + qids + metadata" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="2635" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C20" edge="1" parent="1" source="C20" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O20" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-37" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-40" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="C21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="10 selected_runs固定&lt;br&gt;入力：なし&lt;br&gt;処理：使用する埋め込みの条件・生成日を人手で選択し、selected_runs.jsonのlabel/pathに入力&lt;br&gt;出力：data/external/embeddings/selected_runs.json" vertex="1">
+          <mxGeometry height="90" width="330" x="1775" y="1760" as="geometry" />
+        </mxCell>
+        <mxCell id="O21" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="data/external/embeddings/selected_runs.json" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="2790" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C21" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O21" />
+        <mxCell id="C22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="11C/11Q make report-qid-coverage&lt;br&gt;入力：selected_runs.json&lt;br&gt;処理：QID交差、qid_count、complete_qid_countを集計&lt;br&gt;出力：experiments/exp1/common_qids.tsv + run_qid_counts.tsv" vertex="1">
+          <mxGeometry height="125" width="330" x="1405" y="1990" as="geometry" />
+        </mxCell>
+        <mxCell id="O22" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp1/common_qids.tsv + run_qid_counts.tsv" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="2945" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C22" edge="1" parent="1" source="C22" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O22" />
+        <mxCell id="C23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="11R make collect-xeno-canto-num-recordings&lt;br&gt;入力：API page JSON&lt;br&gt;処理：xeno-cantサイト上の総録音件数である&lt;br&gt;API numRecordingsをQID単位で収集&lt;br&gt;出力：experiments/exp1/qid_num_recordings.tsv" vertex="1">
+          <mxGeometry height="125" width="330" x="690" y="2030" as="geometry" />
+        </mxCell>
+        <mxCell id="O23" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp1/qid_num_recordings.tsv" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="3100" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C23" edge="1" parent="1" source="C23" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O23" />
+        <mxCell id="C24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="12A make run-exp1-simmatrix&#xa;入力：selected/complete runs&#xa;処理：共通QID、QID順、L2 cosine行列、audio窓平均&#xa;出力：experiments/exp1/&lt;run&gt;/{similarity.npy,heatmap.png,distribution.png,matrix_qids.json,metadata}" vertex="1">
+          <mxGeometry height="125" width="460" x="1765" y="1990" as="geometry" />
+        </mxCell>
+        <mxCell id="O24" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp1/&lt;run&gt;/{similarity.npy,heatmap.png,distribution.png,matrix_qids.json,metadata}" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="3255" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C24" edge="1" parent="1" source="C24" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O24" />
+        <mxCell id="C25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="12B make run-exp1-simmatrix-ordered&lt;br&gt;入力：各モダリティごとのembeddings.np，/selected_runs.json&amp;nbsp;+ /common_qids.tsv&amp;nbsp;+ qid_num_recordings.tsv&lt;br&gt;処理：録音数降順で上位100件を抽出（QID昇順），各モダリティごとの埋込み類似度のheatmap，および類似度の分布の図を作成．&lt;br&gt;出力：experiments/exp1_ordered//{heatmap.png,distribution.png}" vertex="1">
+          <mxGeometry height="125" width="330" x="690" y="2360" as="geometry" />
+        </mxCell>
+        <mxCell id="O25" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp1_ordered/&lt;run&gt;/{heatmap.png,distribution.png}" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="3410" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C25" edge="1" parent="1" source="C25" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O25" />
+        <mxCell id="C26" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="12C make run-exp2-integrated-graph&lt;br&gt;入力：各モダリティごとのembeddings.npy&amp;nbsp;+ common_qids.tsv&amp;nbsp;&amp;nbsp;+ qid_num_recordings.tsv&amp;nbsp;+ bird_taxonomy_graph.pkl&lt;br&gt;処理：各モダリティから埋め込み手法をそれぞれ選択し，統合した埋め込みを作成．統合した埋め込みについて，埋め込み間の類似度が上位5％であるノード同士のエッジのみをグラフとして描画．個別の埋め込み（あるモダリティの埋め込みの手法を一つ選択）についても同様の処理を行い，グラフとして描画．&lt;br&gt;設定は，union weight=max，layout共有&lt;br&gt;出力：experiments/exp2//{graph,language,audio,integrated}.svg + metadata.json" vertex="1">
+          <mxGeometry height="180" width="440" x="-840" y="2360" as="geometry" />
+        </mxCell>
+        <mxCell id="O26" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp2/&lt;run-combination&gt;/{graph,language,audio,integrated}.svg + metadata.json" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="3565" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C26" edge="1" parent="1" source="C26" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O26" />
+        <mxCell id="C27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="13A make run-exp3-sub1-audio&lt;br&gt;入力：audioのembedding.npy&lt;div&gt;処理：同QIDの別録音を正解と定義し，cosineで類似度順で並べ，ランキング評価指標により評価&lt;br&gt;出力：experiments/exp3/sub1_audio//{per_query.tsv,summary.tsv,metadata.json}&lt;/div&gt;" vertex="1">
+          <mxGeometry height="125" width="420" x="-40" y="2420" as="geometry" />
+        </mxCell>
+        <mxCell id="O27" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp3/sub1_audio/&lt;run&gt;/{per_query.tsv,summary.tsv,metadata.json}" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="3720" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C27" edge="1" parent="1" source="C27" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O27" />
+        <mxCell id="C28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="13B make run-exp3-search&lt;br&gt;入力：qid_taxon_labels.tsv&amp;nbsp;+ 各モダリティごとのembeddings.npy&amp;nbsp;&lt;br&gt;処理：各モダリティから埋め込み手法（あるモダリティを未使用も含む）をそれぞれ選択し，統合した埋め込みを作成．クエリに対してQIDを統合した埋め込みに基づきcosine類似度順で並べる．クエリのlabelと一致するlabelを持つQIDを正解と定義し，ランキング評価指標により評価．&lt;br&gt;出力：experiments/exp3/taxon_probe/" vertex="1">
+          <mxGeometry height="125" width="330" x="240" y="2620" as="geometry" />
+        </mxCell>
+        <mxCell id="O28" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp3/taxon_probe/&lt;pattern&gt;/&lt;rank&gt;/&lt;run&gt;/{per_query.tsv,summary.tsv,metadata.json}" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="3875" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C28" edge="1" parent="1" source="C28" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O28" />
+        <mxCell id="C29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="14 Taxon probe結果集約&#xa;入力：C28の結果&#xa;処理：rank・pattern・run組合せを保って集約&#xa;出力：experiments/exp3/taxon_probe/以下の集約結果" vertex="1">
+          <mxGeometry height="125" width="330" x="1440" y="2920" as="geometry" />
+        </mxCell>
+        <mxCell id="O29" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="experiments/exp3/taxon_probe/以下の集約結果" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="4030" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C29" edge="1" parent="1" source="C29" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O29" />
+        <mxCell id="C30" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" value="15 再現用成果物固定&#xa;入力：C01〜C29の入出力&#xa;処理：本体・行対応・run・QID・label・代表値を一組で保管&#xa;出力：再現用成果物一式" vertex="1">
+          <mxGeometry height="125" width="330" x="1440" y="3075" as="geometry" />
+        </mxCell>
+        <mxCell id="O30" parent="1" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="再現用成果物一式" vertex="1">
+          <mxGeometry height="75" width="310" x="3890" y="4185" as="geometry" />
+        </mxCell>
+        <mxCell id="out_C30" edge="1" parent="1" source="C30" style="edgeStyle=orthogonalEdgeStyle;endArrow=block;html=1;" target="O30" />
+        <mxCell id="d0" edge="1" parent="1" source="C00" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C01" />
+        <mxCell id="d1" edge="1" parent="1" source="C00" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C02" />
+        <mxCell id="d2" edge="1" parent="1" source="C01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C03" />
+        <mxCell id="d3" edge="1" parent="1" source="C02" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C03" />
+        <mxCell id="d4" edge="1" parent="1" source="C03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C04" />
+        <mxCell id="d5" edge="1" parent="1" source="C04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C05" />
+        <mxCell id="d6" edge="1" parent="1" source="C04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C07" />
+        <mxCell id="d7" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C06" />
+        <mxCell id="d8" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C07" />
+        <mxCell id="d9" edge="1" parent="1" source="C07" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C08" />
+        <mxCell id="d10" edge="1" parent="1" source="C08" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C09" />
+        <mxCell id="d11" edge="1" parent="1" source="C09" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C10" />
+        <mxCell id="d12" edge="1" parent="1" source="C10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C11" />
+        <mxCell id="d13" edge="1" parent="1" source="C10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C12" />
+        <mxCell id="d14" edge="1" parent="1" source="C10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C13" />
+        <mxCell id="d15" edge="1" parent="1" source="C04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C14" />
+        <mxCell id="d16" edge="1" parent="1" source="C14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C15" />
+        <mxCell id="d17" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C16" />
+        <mxCell id="d18" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C17" />
+        <mxCell id="d19" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C18" />
+        <mxCell id="d20" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C19" />
+        <mxCell id="d21" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C20" />
+        <mxCell id="d22" edge="1" parent="1" source="C11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d23" edge="1" parent="1" source="C12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d24" edge="1" parent="1" source="C13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d25" edge="1" parent="1" source="C15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d26" edge="1" parent="1" source="C16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d27" edge="1" parent="1" source="C17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d28" edge="1" parent="1" source="C18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d29" edge="1" parent="1" source="C19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d30" edge="1" parent="1" source="C20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C21" />
+        <mxCell id="d31" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C22" />
+        <mxCell id="d32" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C24" />
+        <mxCell id="d33" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C25" />
+        <mxCell id="d34" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C26" />
+        <mxCell id="d35" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C27" />
+        <mxCell id="d36" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C28" />
+        <mxCell id="d37" edge="1" parent="1" source="C23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C25" />
+        <mxCell id="d38" edge="1" parent="1" source="C23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C26" />
+        <mxCell id="d39" edge="1" parent="1" source="C22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C25" />
+        <mxCell id="d40" edge="1" parent="1" source="C22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C26" />
+        <mxCell id="d41" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C26" />
+        <mxCell id="d42" edge="1" parent="1" source="C06" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C28" />
+        <mxCell id="d43" edge="1" parent="1" source="C28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C29" />
+        <mxCell id="d44" edge="1" parent="1" source="C24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C30" />
+        <mxCell id="d45" edge="1" parent="1" source="C25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C30" />
+        <mxCell id="d46" edge="1" parent="1" source="C26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C30" />
+        <mxCell id="d47" edge="1" parent="1" source="C27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C30" />
+        <mxCell id="d48" edge="1" parent="1" source="C29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;" target="C30" />
+        <mxCell id="S01" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：QIDリスト&#xa;query.tsvは外部検索結果。再検索せず、bird_qids.tsvがdump抽出対象を固定する。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="-490" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge0" edge="1" parent="1" source="C01" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S01" />
+        <mxCell id="S02" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：ontology→graph&#xa;ontology 1レコード=graph 1ノード。parent_taxonは親→子の有向辺。未知親はplaceholder。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="-335" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge1" edge="1" parent="1" source="C05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S02" />
+        <mxCell id="S03" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：surfaceと行対応&#xa;surface_manifest 1行=embeddings 1行。surface_id/qid/ordinalで表層形を追跡する。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="-180" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge2" edge="1" parent="1" source="C14" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S03" />
+        <mxCell id="S04" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：Taxon label&#xa;対象自身を除きparent方向の最近傍祖先。13Bの正解ラベルに使い、学習入力にはしない。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="-25" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge3" edge="1" parent="1" source="C06" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S04" />
+        <mxCell id="S05" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：API録音とlocal audio&#xa;numRecordingsはAPI件数、recording_mapはID列、raw audioは取得成功ファイル。値を混同しない。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge4" edge="1" parent="1" source="C08" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S05" />
+        <mxCell id="S06" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：音声の粒度&#xa;audio_manifest 1行=窓。同じ(QID,relative_path)を平均し、実験では録音/QID単位へ集約する。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="285" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge5" edge="1" parent="1" source="C11" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S06" />
+        <mxCell id="S07" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：graph行対応&#xa;全graph手法でqids[i]とembeddings[i]を固定。initial embeddingは学習可能表現で固定one-hotではない。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge6" edge="1" parent="1" source="C16" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S07" />
+        <mxCell id="S08" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：graph手法&#xa;GCN/SAGE/GRACEは伝播、Node2Vecはwalk/window、TransEはparent_taxon三つ組。metadata/traceで条件確認。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="595" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge7" edge="1" parent="1" source="C19" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S08" />
+        <mxCell id="S09" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：言語集約&#xa;max32 token、padding mask付きmean pooling。特殊token別除外とprojectionはない。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="750" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge8" edge="1" parent="1" source="C15" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S09" />
+        <mxCell id="S10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：run&#xa;runは1回の埋込み生成ディレクトリ。selected_runs.jsonが手法/モデルごとのpathを固定する。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge9" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S10" />
+        <mxCell id="S11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：共通QID&#xa;common_qidsは集合交差。complete_qid_countはrunと他modality共通集合の交差件数。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge10" edge="1" parent="1" source="C22" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S11" />
+        <mxCell id="S12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：similarity matrix&#xa;同じQID順でL2正規化後の内積。12Bだけ録音数順上位100件へ制限する。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="1215" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge11" edge="1" parent="1" source="C24" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S12" />
+        <mxCell id="S13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：統合graph&#xa;各modalityの対角除外p95以上を辺にし、同一pairをunion。union_thresholdは再選別しない。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="1370" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge12" edge="1" parent="1" source="C26" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S13" />
+        <mxCell id="S14" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：音声検索&#xa;query/候補は録音単位。同QID別録音のみ正解。正解0 queryは平均から除外する。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="1525" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge13" edge="1" parent="1" source="C27" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S14" />
+        <mxCell id="S15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：Taxon probe&#xa;QID単位のG/L/A連結。自己除外、同label正解、分割なし。14でrank/pattern別集約。" vertex="1">
+          <mxGeometry height="105" width="300" x="4260" y="1680" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge14" edge="1" parent="1" source="C28" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S15" />
+        <mxCell id="S16" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：graph入力と辺&#xa;parent_taxonを親→子の有向辺、undirected=false。GCN/SAGE/GRACEは学習可能initial embedding＋自己ループで伝播。placeholderの扱いはqids/metadataで確認。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="-490" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge15" edge="1" parent="1" source="C16" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S16" />
+        <mxCell id="S17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：GCN/SAGE/GRACE学習&#xa;GCNはGAE negative sampling、SAGEはmean＋近傍[25,10]、GRACEはedge drop 2視点のin-batch contrastive loss。GRACE保存はencoder出力。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="-345" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge16" edge="1" parent="1" source="C18" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S17" />
+        <mxCell id="S18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：Node2Vec/TransE&#xa;Node2Vecは有向walk、p=q=1、window学習、行き止まりで終了。TransEはparent_taxonの(h,r,t)にhead/tail corruptionとmargin lossを適用。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="-200" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge17" edge="1" parent="1" source="C19" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S18" />
+        <mxCell id="S19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：graph出力対応&#xa;embeddings.npy[i]↔qids.json[i]。training_trace等は条件確認用。L2正規化は実験側のcosine計算時に行う。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="-55" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge18" edge="1" parent="1" source="C20" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S19" />
+        <mxCell id="S20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：音声埋込み行&#xa;wav2vec2=16kHz・全体・時間平均、BirdNET=48kHz・3秒窓・pb。Perch=別環境・32kHz相当・5秒窓、内部checkpoint/集約は未確認。manifest行がembeddings行に対応。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge19" edge="1" parent="1" source="C11" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S20" />
+        <mxCell id="S21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：Taxon label探索&#xa;parent_taxonを上方向へ辿る最近傍order/family祖先をlabel_qidにする。label_name/distanceを出力。親欠損・循環・該当なしは空欄。複数親は推測選択しない。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="235" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge20" edge="1" parent="1" source="C06" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S21" />
+        <mxCell id="S22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：代表値とrun探索&#xa;言語は(qid,ordinal,surface_id,text)先頭。音声は(QID,path)窓平均後、共通pathから代表を選ぶ。selected_runs優先、autoは必要ファイル完了run。13Bはselectedのみ。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="380" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge21" edge="1" parent="1" source="C21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S22" />
+        <mxCell id="S23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：共通集合と録音数&#xa;complete_qid_countはrunと他modality共通集合の交差件数。12Bは録音数表にないQIDを除外、12Cは0扱い。numRecordingsはAPI値でlocal file数ではない。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge22" edge="1" parent="1" source="C22" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S23" />
+        <mxCell id="S24" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：Experiment 1計算&#xa;行L2正規化後S=XX^T、対角=1.0。12AはQID昇順全件、12Bは(-numRecordings,QID)上位100。12Aはnpy/ID等、12Bはheatmap/distributionを出力。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge23" edge="1" parent="1" source="C24" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S24" />
+        <mxCell id="S25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：Experiment 2閾値/描画&#xa;対角除外上三角のp95（NumPy線形補間）、score以上を辺にする。union weight=max、union_thresholdは再選別せず記録。全QID/孤立ノードを描画しspring_layout(seed=42,k=.85,iterations=200)を共有。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="815" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge24" edge="1" parent="1" source="C26" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S25" />
+        <mxCell id="S26" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：13A評価&#xa;録音単位で同path自身を除外、同QID別録音を正解。AP=全候補順位のprecision合計/全relevant数、MRR=最初の正解の逆数、nDCG@10/50/100。正解0 queryは平均から除外。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="960" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge25" edge="1" parent="1" source="C27" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S26" />
+        <mxCell id="S27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：13B評価&#xa;P@k=正解/k、R@k=正解/全正解、F1=調和平均、AP@10=precision合計/全正解、RRはtop10内の最初の正解。正解0も平均含むがevaluated_query_countから除外。境界同点規則は未確認。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="1105" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge26" edge="1" parent="1" source="C28" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S27" />
+        <mxCell id="S28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" value="詳細：再利用・固定境界&#xa;本体、行対応、selected_runs、対象QID、labels、代表値、metadataを一組で参照。既存/partial/failedの再利用条件は実装依存。日時・版・hash・依存環境が無ければ未確認/未記録。" vertex="1">
+          <mxGeometry height="125" width="330" x="4620" y="1250" as="geometry" />
+        </mxCell>
+        <mxCell id="sedge27" edge="1" parent="1" source="C30" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="S28" />
+        <mxCell id="C08M" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="8準備 make download-audio-models&#xa;処理：音声モデルcacheを事前取得&#xa;出力：data/external/models/audio/huggingface/等" vertex="1">
+          <mxGeometry height="115" width="320" x="4260" y="1840" as="geometry" />
+        </mxCell>
+        <mxCell id="C10R" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="7補修 make repair-xeno-canto-audio&#xa;処理：raw audioをdecode検査し修復reportを生成&#xa;出力：xeno_canto_audio_repair.tsv/json" vertex="1">
+          <mxGeometry height="115" width="320" x="4260" y="1995" as="geometry" />
+        </mxCell>
+        <mxCell id="C10F" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="8F make finetune-wav2vec2-crossval&#xa;処理：raw audioで5-fold wav2vec2 fine-tune&#xa;出力：data/external/models/audio/wav2vec2-finetuned/wav2vec2-model_0..4/" vertex="1">
+          <mxGeometry height="115" width="320" x="4260" y="2150" as="geometry" />
+        </mxCell>
+        <mxCell id="C11F" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="8F make build-audio-embeddings-wav2vec2-finetuned&#xa;処理：foldモデルから音声埋込みを生成&#xa;出力：data/external/embeddings/audio/wav2vec2-finetuned/..." vertex="1">
+          <mxGeometry height="115" width="320" x="4260" y="2305" as="geometry" />
+        </mxCell>
+        <mxCell id="C22S" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="10確認 make inspect-multimodal-sources&#xa;処理：selected/auto-discover runとmetadataを検査&#xa;出力：診断標準出力" vertex="1">
+          <mxGeometry height="115" width="320" x="4260" y="2460" as="geometry" />
+        </mxCell>
+        <mxCell id="C22G" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" value="準備 make check-gpu / check-birdnet-gpu&#xa;処理：CUDA/TensorFlowのGPU認識を確認&#xa;出力：診断標準出力" vertex="1">
+          <mxGeometry height="115" width="320" x="4260" y="2615" as="geometry" />
+        </mxCell>
+        <mxCell id="optC08M" edge="1" parent="1" source="C08M" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="C11" />
+        <mxCell id="optC10R" edge="1" parent="1" source="C10R" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="C10F" />
+        <mxCell id="optC10F" edge="1" parent="1" source="C10F" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="C11F" />
+        <mxCell id="optC11F" edge="1" parent="1" source="C11F" style="edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;html=1;" target="C21" />
+        <mxCell id="io0" edge="1" parent="1" source="O00" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C01" value="query.tsv" />
+        <mxCell id="io1" edge="1" parent="1" source="O01" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C03" value="bird_qids.tsv" />
+        <mxCell id="io2" edge="1" parent="1" source="O02" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C03" value="dump" />
+        <mxCell id="io3" edge="1" parent="1" source="O03" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C04" value="entity JSON" />
+        <mxCell id="io4" edge="1" parent="1" source="O04" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C05" value="ontology" />
+        <mxCell id="io5" edge="1" parent="1" source="O04" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C07" value="ontology/graph" />
+        <mxCell id="io6" edge="1" parent="1" source="O04" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C14" value="ontology" />
+        <mxCell id="io7" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C06" value="graph" />
+        <mxCell id="io8" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C07" value="graph" />
+        <mxCell id="io9" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C16" value="graph" />
+        <mxCell id="io10" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C17" value="graph" />
+        <mxCell id="io11" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C18" value="graph" />
+        <mxCell id="io12" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C19" value="graph" />
+        <mxCell id="io13" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C20" value="graph" />
+        <mxCell id="io14" edge="1" parent="1" source="O05" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C26" value="graph" />
+        <mxCell id="io15" edge="1" parent="1" source="O06" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C28" value="labels" />
+        <mxCell id="io16" edge="1" parent="1" source="O07" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C08" value="Xeno IDs" />
+        <mxCell id="io17" edge="1" parent="1" source="O08" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C09" value="API JSON" />
+        <mxCell id="io18" edge="1" parent="1" source="O09" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C10" value="recording map" />
+        <mxCell id="io19" edge="1" parent="1" source="O10" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C11" value="raw audio" />
+        <mxCell id="io20" edge="1" parent="1" source="O10" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C12" value="raw audio" />
+        <mxCell id="io21" edge="1" parent="1" source="O10" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C13" value="raw audio" />
+        <mxCell id="io22" edge="1" parent="1" source="O14" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C15" value="surface manifest" />
+        <mxCell id="io23" edge="1" parent="1" source="O11" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="audio runs" />
+        <mxCell id="io24" edge="1" parent="1" source="O12" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="audio runs" />
+        <mxCell id="io25" edge="1" parent="1" source="O13" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="audio runs" />
+        <mxCell id="io26" edge="1" parent="1" source="O15" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="language runs" />
+        <mxCell id="io27" edge="1" parent="1" source="O16" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="graph runs" />
+        <mxCell id="io28" edge="1" parent="1" source="O17" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="graph runs" />
+        <mxCell id="io29" edge="1" parent="1" source="O18" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="graph runs" />
+        <mxCell id="io30" edge="1" parent="1" source="O19" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="graph runs" />
+        <mxCell id="io31" edge="1" parent="1" source="O20" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C21" value="graph runs" />
+        <mxCell id="io32" edge="1" parent="1" source="O21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C22" value="selected runs" />
+        <mxCell id="io33" edge="1" parent="1" source="O21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C24" value="selected runs" />
+        <mxCell id="io34" edge="1" parent="1" source="O21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C25" value="selected runs" />
+        <mxCell id="io35" edge="1" parent="1" source="O21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C26" value="selected runs" />
+        <mxCell id="io36" edge="1" parent="1" source="O21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C27" value="selected runs" />
+        <mxCell id="io37" edge="1" parent="1" source="O21" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C28" value="selected runs" />
+        <mxCell id="io38" edge="1" parent="1" source="O22" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C25" value="coverage" />
+        <mxCell id="io39" edge="1" parent="1" source="O22" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C26" value="coverage" />
+        <mxCell id="io40" edge="1" parent="1" source="O23" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C25" value="recording counts" />
+        <mxCell id="io41" edge="1" parent="1" source="O23" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C26" value="recording counts" />
+        <mxCell id="io42" edge="1" parent="1" source="O28" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeWidth=2;strokeColor=#7f8c8d;endArrow=block;html=1;" target="C29" value="Taxon probe results" />
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-2" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;" value="" vertex="1">
+          <mxGeometry height="80" width="120" x="125" y="-180" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-3" edge="1" parent="1" source="bNakAFRgnnS8bUFGIcVo-2" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="C00" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="390" y="80" as="sourcePoint" />
+            <mxPoint x="440" y="30" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-11" edge="1" parent="1" source="C04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.504;entryY=0.04;entryDx=0;entryDy=0;entryPerimeter=0;defaultLabelBackgroundColor=page;labelPadding=0 4;" target="C05">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-28" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;pbとは&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="-60" y="1720" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-29" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;確認する&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="660" y="1670" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-32" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="ほんとうに？" vertex="1">
+          <mxGeometry height="30" width="60" x="-1040" y="1520" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-33" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="ほんとうに？" vertex="1">
+          <mxGeometry height="30" width="60" x="-990" y="1670" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-42" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;００１はどこから来た？&lt;/b&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="2445" y="1920" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-54" edge="1" parent="1" source="C16" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C26" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="810" y="2000" as="sourcePoint" />
+            <mxPoint x="860" y="1950" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-55" edge="1" parent="1" source="C13" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C26" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="955" y="1780" as="sourcePoint" />
+            <mxPoint x="100" y="2170" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-56" edge="1" parent="1" source="C12" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C26" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="640" y="2050" as="sourcePoint" />
+            <mxPoint x="290" y="2460" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-57" edge="1" parent="1" source="C11" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C26" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="310" y="2100" as="sourcePoint" />
+            <mxPoint x="380" y="2510" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-58" edge="1" parent="1" source="C15" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C26" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="-360" y="2280" as="sourcePoint" />
+            <mxPoint x="130" y="2690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-61" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1570" y="2120" as="sourcePoint" />
+            <mxPoint x="880" y="2300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-62" edge="1" parent="1" source="C24" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="2125" y="2420" as="sourcePoint" />
+            <mxPoint x="1410" y="2660" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-63" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1100" y="1870" as="sourcePoint" />
+            <mxPoint x="990" y="2565" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-64" edge="1" parent="1" source="C23" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1155" y="2240" as="sourcePoint" />
+            <mxPoint x="910" y="2730" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-65" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="600" y="1850" as="sourcePoint" />
+            <mxPoint x="900" y="2800" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-66" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="190" y="1850" as="sourcePoint" />
+            <mxPoint x="805" y="2870" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-67" edge="1" parent="1" source="C11" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="210" y="2010" as="sourcePoint" />
+            <mxPoint x="875" y="2520" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-68" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C25" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="-790" y="1840" as="sourcePoint" />
+            <mxPoint x="820" y="3060" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-69" edge="1" parent="1" source="C22" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;fillColor=#60a917;strokeColor=#2D7600;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="C26" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1825" y="2260" as="sourcePoint" />
+            <mxPoint x="211.8918918918919" y="2430" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-70" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;fillColor=#60a917;strokeColor=#2D7600;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="C26" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="850" y="2160" as="sourcePoint" />
+            <mxPoint x="-777.5" y="2475" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-71" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C27" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="-230" y="1860" as="sourcePoint" />
+            <mxPoint x="205" y="2725" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-72" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C27" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="180" y="1850" as="sourcePoint" />
+            <mxPoint x="320" y="2630" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-73" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C27" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="600" y="1850" as="sourcePoint" />
+            <mxPoint x="430" y="2670" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-74" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="モダリティ単位で出力を表すノード&lt;br&gt;みどりのラインを減らす" vertex="1">
+          <mxGeometry height="30" width="60" x="-790" y="2060" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-76" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;であればは要注意&lt;br&gt;&lt;br&gt;日常用語っぽく使ってはだめ&lt;br&gt;&lt;br&gt;ORも&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;種類も要注意&lt;/b&gt;&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;b&gt;らしい&lt;br&gt;&lt;br&gt;もの　&lt;br&gt;こと&lt;/b&gt;" vertex="1">
+          <mxGeometry height="90" width="60" x="-140" y="2420" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-80" edge="1" parent="1" source="C06" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;exitX=0.5;exitY=1;exitDx=0;exitDy=0;fillColor=#60a917;strokeColor=#2D7600;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="C28" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="865" y="1900" as="sourcePoint" />
+            <mxPoint x="620" y="2590" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-81" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C28" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="600" y="1850" as="sourcePoint" />
+            <mxPoint x="210" y="2930" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-82" edge="1" parent="1" source="C12" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="C28" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="595" y="2610" as="sourcePoint" />
+            <mxPoint x="400" y="3380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-83" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C28" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="-230" y="1850" as="sourcePoint" />
+            <mxPoint x="770" y="2920" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-84" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fillColor=#60a917;strokeColor=#2D7600;" target="C28" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="-790" y="1840" as="sourcePoint" />
+            <mxPoint x="1035" y="3390" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-85" edge="1" parent="1" source="C16" style="endArrow=classic;html=1;rounded=0;defaultLabelBackgroundColor=page;labelPadding=0 4;fillColor=#60a917;strokeColor=#2D7600;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="C28" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="630" y="2460" as="sourcePoint" />
+            <mxPoint x="420" y="2610" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-86" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;統合埋め込み作成のーどがあってもいいかも&lt;/b&gt;" vertex="1">
+          <mxGeometry height="90" width="60" x="-10" y="2730" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-87" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;クエリの作成方法について&lt;/b&gt;" vertex="1">
+          <mxGeometry height="90" width="60" x="160" y="2630" as="geometry" />
+        </mxCell>
+        <mxCell id="bNakAFRgnnS8bUFGIcVo-90" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;b&gt;Cとは？&lt;/b&gt;" vertex="1">
+          <mxGeometry height="90" width="60" x="1320" y="2937.5" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
